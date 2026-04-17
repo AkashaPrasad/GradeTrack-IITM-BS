@@ -1,6 +1,6 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/stores/auth';
-import { CheckSquare, BarChart2, BookOpen, Bell, Github, Linkedin, ExternalLink } from 'lucide-react';
+import { CheckSquare, BarChart2, BookOpen, Bell, Linkedin } from 'lucide-react';
 
 const features = [
   {
@@ -153,16 +153,6 @@ export default function LandingPage() {
             GradeTrack is completely free to use — no subscriptions, no ads, no data sold.
             The source code is open, which means anyone can review it, contribute to it, or build on top of it.
           </p>
-          <a
-            href="https://github.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 h-9 px-5 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-          >
-            <Github className="h-4 w-4" />
-            View source on GitHub
-            <ExternalLink className="h-3 w-3 text-gray-400" />
-          </a>
         </div>
       </section>
 

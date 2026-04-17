@@ -2,10 +2,10 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/stores/auth';
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { session, initializing, profile } = useAuth();
+  const { session, initializing, profile, profileResolved } = useAuth();
   const loc = useLocation();
 
-  if (initializing) {
+  if (initializing || (session && !profileResolved)) {
     return (
       <div className="min-h-screen grid place-items-center">
         <div className="flex items-center gap-2 text-fgmuted text-sm">
@@ -29,8 +29,17 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 }
 
 export function AdminGuard({ children }: { children: React.ReactNode }) {
-  const { profile, initializing } = useAuth();
-  if (initializing) return null;
+  const { profile, initializing, session, profileResolved } = useAuth();
+  if (initializing || (session && !profileResolved)) {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <div className="flex items-center gap-2 text-fgmuted text-sm">
+          <span className="h-2 w-2 rounded-full bg-accent animate-pulse" />
+          Loading…
+        </div>
+      </div>
+    );
+  }
   if (!profile || profile.role !== 'admin') {
     return (
       <div className="min-h-screen grid place-items-center p-6">

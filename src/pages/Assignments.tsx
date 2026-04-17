@@ -249,7 +249,7 @@ function WeekGroup({ weekNum, items, completionMap, level, toggle, subjects }: {
           {allDone
             ? <Badge variant="success">Done</Badge>
             : days !== null && (
-              <Badge variant={days <= 0 ? 'danger' : days <= 3 ? 'warning' : days <= 5 ? 'info' : 'success'}>
+              <Badge variant={days <= 0 ? 'danger' : days <= 3 ? 'warning' : 'info'}>
                 {days === 0 ? 'Today' : days < 0 ? 'Overdue' : `${days}d`}
               </Badge>
             )

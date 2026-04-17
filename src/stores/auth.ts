@@ -8,6 +8,7 @@ interface AuthState {
   user: User | null;
   profile: Profile | null;
   initializing: boolean;
+  profileResolved: boolean;
   domainBlocked: boolean;
   _authSub: { unsubscribe: () => void } | null;
   init: () => Promise<void>;
@@ -22,6 +23,7 @@ export const useAuth = create<AuthState>((set, get) => ({
   user: null,
   profile: null,
   initializing: true,
+  profileResolved: false,
   domainBlocked: false,
   _authSub: null,
 
@@ -34,11 +36,20 @@ export const useAuth = create<AuthState>((set, get) => ({
     if (session?.user) {
       if (!emailIsAllowed(session.user.email)) {
         await supabase.auth.signOut();
-        set({ session: null, user: null, profile: null, domainBlocked: true, initializing: false });
+        set({
+          session: null,
+          user: null,
+          profile: null,
+          domainBlocked: true,
+          initializing: false,
+          profileResolved: true,
+        });
         return;
       }
-      set({ session, user: session.user });
+      set({ session, user: session.user, profileResolved: false });
       await get().refreshProfile();
+    } else {
+      set({ profileResolved: true });
     }
     set({ initializing: false });
 
@@ -46,13 +57,13 @@ export const useAuth = create<AuthState>((set, get) => ({
       if (newSession?.user) {
         if (!emailIsAllowed(newSession.user.email)) {
           await supabase.auth.signOut();
-          set({ session: null, user: null, profile: null, domainBlocked: true });
+          set({ session: null, user: null, profile: null, domainBlocked: true, profileResolved: true });
           return;
         }
-        set({ session: newSession, user: newSession.user, domainBlocked: false });
+        set({ session: newSession, user: newSession.user, domainBlocked: false, profileResolved: false });
         await get().refreshProfile();
       } else {
-        set({ session: null, user: null, profile: null });
+        set({ session: null, user: null, profile: null, profileResolved: true });
       }
     });
     set({ _authSub: subscription });
@@ -77,19 +88,35 @@ export const useAuth = create<AuthState>((set, get) => ({
 
   refreshProfile: async () => {
     const { user } = get();
-    if (!user) return;
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .maybeSingle();
-    if (error) {
-      // Log only in dev; never expose Supabase internals to production console
-      if (import.meta.env.DEV) console.error('Profile fetch failed', error);
+    if (!user) {
+      set({ profile: null, profileResolved: true });
       return;
     }
-    set({ profile: (data as Profile) ?? null });
-    if (data) {
+
+    let profile: Profile | null = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (!error && data) {
+        profile = data as Profile;
+        break;
+      }
+
+      if (error && import.meta.env.DEV) {
+        console.error('Profile fetch failed', error);
+      }
+
+      if (attempt < 2) {
+        await new Promise(resolve => window.setTimeout(resolve, 250 * (attempt + 1)));
+      }
+    }
+
+    set({ profile, profileResolved: true });
+    if (profile) {
       // Fire-and-forget last_seen bump.
       supabase.from('profiles').update({ last_seen_at: new Date().toISOString() }).eq('id', user.id);
     }

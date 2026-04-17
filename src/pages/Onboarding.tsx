@@ -114,6 +114,9 @@ export default function Onboarding() {
             <p className="text-sm text-fgmuted mb-3">
               Select the courses you're taking this term. You can change this later in Profile.
             </p>
+            <div className="mb-3 rounded-lg border border-warning/20 bg-warning/10 p-3 text-sm text-warning">
+              Please choose your current courses only, not courses from previous terms.
+            </div>
             {subjectsLoading ? (
               <div className="space-y-2">
                 {[...Array(5)].map((_, i) => (

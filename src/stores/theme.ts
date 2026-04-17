@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/stores/auth';
 
 type Theme = 'light' | 'dark' | 'system';
 const STORAGE_KEY = 'gt-theme';
@@ -45,7 +46,14 @@ export const useTheme = create<ThemeState>((set, get) => ({
     if (persist) {
       const { data } = await supabase.auth.getUser();
       if (data.user) {
-        await supabase.from('profiles').update({ theme_preference: t }).eq('id', data.user.id);
+        const previousProfile = useAuth.getState().profile;
+        useAuth.setState(state => ({
+          profile: state.profile ? { ...state.profile, theme_preference: t } : state.profile
+        }));
+        const { error } = await supabase.from('profiles').update({ theme_preference: t }).eq('id', data.user.id);
+        if (error) {
+          useAuth.setState({ profile: previousProfile });
+        }
       }
     }
   }

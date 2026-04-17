@@ -69,7 +69,7 @@ function DashWeekGroup({ weekNum, items, subjects, level, toggle }: {
           </button>
           {deadline && <span className="text-[11px] text-fgmuted">Due {formatDate(deadline)}</span>}
           {days !== null && (
-            <Badge variant={days === 0 ? 'warning' : days <= 3 ? 'warning' : days <= 7 ? 'info' : 'success'}>
+            <Badge variant={days <= 0 ? 'danger' : days <= 3 ? 'warning' : 'info'}>
               {days === 0 ? 'Today' : `${days}d`}
             </Badge>
           )}
