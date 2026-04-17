@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Offline — GradeTrack</title>
+  <style>
+    :root { color-scheme: dark light; }
+    body {
+      margin: 0;
+      display: grid;
+      place-items: center;
+      min-height: 100vh;
+      font-family: Inter, -apple-system, system-ui, sans-serif;
+      background: #0a0a0a;
+      color: #fafafa;
+    }
+    @media (prefers-color-scheme: light) {
+      body { background: #fafafa; color: #0a0a0a; }
+    }
+    .wrap { text-align: center; padding: 32px; max-width: 380px; }
+    .logo { width: 56px; height: 56px; border-radius: 12px; background: #6366f1; display: inline-grid; place-items: center; margin-bottom: 24px; }
+    h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 8px; }
+    p { margin: 0; opacity: 0.6; font-size: 14px; line-height: 1.5; }
+    button { margin-top: 24px; background: #6366f1; color: white; border: 0; padding: 10px 16px; border-radius: 6px; font-weight: 500; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="logo">
+      <svg width="24" height="24" viewBox="0 0 32 32"><path d="M9 10h14M9 16h10M9 22h14" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>
+    </div>
+    <h1>You're offline</h1>
+    <p>We can't reach the network right now. Your grades and assignment completions will sync automatically when you're back online.</p>
+    <button onclick="location.reload()">Try again</button>
+  </div>
+</body>
+</html>
