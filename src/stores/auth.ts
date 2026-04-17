@@ -9,6 +9,7 @@ interface AuthState {
   profile: Profile | null;
   initializing: boolean;
   domainBlocked: boolean;
+  _authSub: { unsubscribe: () => void } | null;
   init: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -22,8 +23,12 @@ export const useAuth = create<AuthState>((set, get) => ({
   profile: null,
   initializing: true,
   domainBlocked: false,
+  _authSub: null,
 
   init: async () => {
+    // Unsubscribe any previous listener (guards against double-init in React StrictMode)
+    get()._authSub?.unsubscribe();
+
     const { data } = await supabase.auth.getSession();
     const session = data.session;
     if (session?.user) {
@@ -37,7 +42,7 @@ export const useAuth = create<AuthState>((set, get) => ({
     }
     set({ initializing: false });
 
-    supabase.auth.onAuthStateChange(async (_event, newSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
       if (newSession?.user) {
         if (!emailIsAllowed(newSession.user.email)) {
           await supabase.auth.signOut();
@@ -50,6 +55,7 @@ export const useAuth = create<AuthState>((set, get) => ({
         set({ session: null, user: null, profile: null });
       }
     });
+    set({ _authSub: subscription });
   },
 
   signInWithGoogle: async () => {
@@ -78,8 +84,8 @@ export const useAuth = create<AuthState>((set, get) => ({
       .eq('id', user.id)
       .maybeSingle();
     if (error) {
-      // eslint-disable-next-line no-console
-      console.error('Profile fetch failed', error);
+      // Log only in dev; never expose Supabase internals to production console
+      if (import.meta.env.DEV) console.error('Profile fetch failed', error);
       return;
     }
     set({ profile: (data as Profile) ?? null });

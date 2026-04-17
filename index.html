@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en" class="light">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -15,12 +15,11 @@
     />
     <title>GradeTrack</title>
     <script>
-      // Flash-of-unstyled-theme prevention.
+      // Flash-of-unstyled-theme prevention. Default is light; only go dark if explicitly saved.
       (function () {
         try {
           var t = localStorage.getItem('gt-theme');
-          var sys = window.matchMedia('(prefers-color-scheme: dark)').matches;
-          var dark = t === 'dark' || (t !== 'light' && sys);
+          var dark = t === 'dark';
           document.documentElement.classList.toggle('dark', dark);
           document.documentElement.classList.toggle('light', !dark);
         } catch (e) {}

@@ -23,9 +23,9 @@ function apply(theme: Theme): 'light' | 'dark' {
 
 export const useTheme = create<ThemeState>((set, get) => ({
   theme: (typeof localStorage !== 'undefined'
-    ? ((localStorage.getItem(STORAGE_KEY) as Theme) || 'system')
-    : 'system'),
-  effective: 'dark',
+    ? ((localStorage.getItem(STORAGE_KEY) as Theme) || 'light')
+    : 'light'),
+  effective: 'light',
   init: () => {
     const t = get().theme;
     const effective = apply(t);

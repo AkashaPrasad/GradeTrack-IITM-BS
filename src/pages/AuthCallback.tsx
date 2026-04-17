@@ -13,7 +13,7 @@ export default function AuthCallback() {
     (async () => {
       const { data, error } = await supabase.auth.getSession();
       if (error || !data.session) {
-        nav('/login', { replace: true });
+        nav('/', { replace: true });
         return;
       }
       const email = data.session.user.email;
@@ -21,7 +21,7 @@ export default function AuthCallback() {
         await logEvent('auth.domain_blocked', { email }, 'warn');
         await supabase.auth.signOut();
         useAuth.setState({ domainBlocked: true });
-        nav('/login', { replace: true });
+        nav('/', { replace: true });
         return;
       }
       await logEvent('auth.login', { email });

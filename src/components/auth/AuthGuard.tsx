@@ -17,7 +17,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   }
 
   if (!session) {
-    return <Navigate to="/login" replace state={{ from: loc.pathname }} />;
+    return <Navigate to="/" replace state={{ from: loc.pathname }} />;
   }
 
   // New user? send to onboarding (level + courses), except while already there.

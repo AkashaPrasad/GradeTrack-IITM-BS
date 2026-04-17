@@ -14,7 +14,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { Empty } from '@/components/ui/Empty';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Eye, EyeOff } from 'lucide-react';
-import { formatDate } from '@/lib/utils';
+import { formatDate, toUserMessage } from '@/lib/utils';
 import type { Assignment, Term, Subject } from '@/lib/database.types';
 
 const CATEGORIES = ['weekly','quiz','endterm','oppe','project','bonus','roe','bpt','ka','extra'] as const;
@@ -84,7 +84,7 @@ export default function AdminAssignments() {
       }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-assignments', selectedTerm] }); setEditing(null); toast.success('Saved'); },
-    onError: (e: any) => toast.error(e?.message ?? 'Failed')
+    onError: (e: unknown) => toast.error(toUserMessage(e, 'Failed to save assignment'))
   });
 
   const deleteMut = useMutation({
@@ -92,7 +92,8 @@ export default function AdminAssignments() {
       const { error } = await supabase.from('assignments').delete().eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-assignments', selectedTerm] }); toast.success('Deleted'); }
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-assignments', selectedTerm] }); toast.success('Deleted'); },
+    onError: (e: unknown) => toast.error(toUserMessage(e, 'Failed to delete assignment'))
   });
 
   const togglePublish = (a: Assignment) => saveMut.mutate({ ...a, is_published: !a.is_published });
@@ -149,15 +150,30 @@ export default function AdminAssignments() {
                     </DialogTrigger>
                     <AssignmentDialog a={editing} subjects={subjects} onSave={saveMut.mutate} loading={saveMut.isPending} onClose={() => setEditing(null)} />
                   </Dialog>
-                  <Button variant="ghost" size="icon" className="text-danger" onClick={() => { if (confirm('Delete?')) deleteMut.mutate(a.id); }}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  <DeleteButton onConfirm={() => deleteMut.mutate(a.id)} />
                 </CardBody>
               </Card>
             ))}
           </div>
         )}
     </div>
+  );
+}
+
+function DeleteButton({ onConfirm }: { onConfirm: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+  if (confirming) {
+    return (
+      <div className="flex items-center gap-1">
+        <Button variant="ghost" size="sm" className="text-danger h-7 px-2 text-xs" onClick={() => { onConfirm(); setConfirming(false); }}>Yes, delete</Button>
+        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setConfirming(false)}>Cancel</Button>
+      </div>
+    );
+  }
+  return (
+    <Button variant="ghost" size="icon" className="text-danger" onClick={() => setConfirming(true)}>
+      <Trash2 className="h-3.5 w-3.5" />
+    </Button>
   );
 }
 

@@ -45,3 +45,29 @@ export function initialOf(name?: string | null): string {
   if (!name) return '·';
   return name.trim().charAt(0).toUpperCase();
 }
+
+// Pattern list of substrings that indicate raw DB/infra errors leaking schema details.
+const INTERNAL_ERROR_PATTERNS = [
+  'duplicate key', 'violates', 'constraint', 'syntax error', 'relation "',
+  'column "', 'operator does not exist', 'invalid input syntax', 'foreign key',
+  'pg_', 'supabase', 'postgrest', 'undefined', 'PGRST',
+];
+
+/**
+ * Convert any thrown value into a user-safe message.
+ * DB constraint errors, PostgREST codes, and stack traces are replaced with a
+ * generic fallback so internal schema details are never shown in the UI.
+ */
+export function toUserMessage(err: unknown, fallback = 'Something went wrong. Please try again.'): string {
+  let msg: string;
+  if (err instanceof Error) {
+    msg = err.message;
+  } else if (typeof err === 'object' && err !== null && 'message' in err) {
+    msg = String((err as { message: unknown }).message);
+  } else {
+    msg = String(err);
+  }
+  const lower = msg.toLowerCase();
+  const looksInternal = INTERNAL_ERROR_PATTERNS.some(p => lower.includes(p.toLowerCase())) || msg.length > 300;
+  return looksInternal ? fallback : msg;
+}

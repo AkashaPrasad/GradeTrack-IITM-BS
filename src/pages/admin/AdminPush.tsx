@@ -41,8 +41,8 @@ export default function AdminPush() {
       );
       if (!res.ok) throw new Error(await res.text());
       toast.success('Test notification sent to all subscribed users');
-    } catch (e: any) {
-      toast.error(e?.message ?? 'Failed');
+    } catch {
+      toast.error('Failed to send test notification. Check edge function logs.');
     } finally {
       setSending(false);
     }

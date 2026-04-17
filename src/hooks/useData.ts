@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/stores/auth';
 import type { Subject, Enrolment, Grade, Assignment, AssignmentCompletion, Term } from '@/lib/database.types';
 import { toast } from 'sonner';
+import { toUserMessage } from '@/lib/utils';
 
 export function useActiveTerm() {
   return useQuery({
@@ -78,9 +79,9 @@ export function useSaveGrade() {
       });
       return { prev };
     },
-    onError: (_e, _v, ctx) => {
+    onError: (e, _v, ctx) => {
       if (ctx?.prev) qc.setQueryData(['grades', profile?.id], ctx.prev);
-      toast.error('Failed to save grade');
+      toast.error(toUserMessage(e, 'Failed to save grade'));
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ['grades', profile?.id] })
   });
@@ -150,9 +151,9 @@ export function useToggleCompletion() {
       });
       return { prev };
     },
-    onError: (_e, _v, ctx) => {
+    onError: (e, _v, ctx) => {
       if (ctx?.prev) qc.setQueryData(['completions', profile?.id], ctx.prev);
-      toast.error('Failed to update');
+      toast.error(toUserMessage(e, 'Failed to update'));
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ['completions', profile?.id] })
   });

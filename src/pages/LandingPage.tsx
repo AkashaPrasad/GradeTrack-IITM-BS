@@ -65,14 +65,7 @@ export default function LandingPage() {
           and track academic progress — from foundation to diploma.
         </p>
 
-        {domainBlocked && (
-          <div className="mt-6 mx-auto max-w-sm rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            Only <span className="font-medium">@ds.study.iitm.ac.in</span> emails are allowed.
-            Please sign in with your official college account.
-          </div>
-        )}
-
-        <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+        <div className="mt-8 flex flex-col items-center gap-3">
           <button
             onClick={signInWithGoogle}
             className="inline-flex items-center gap-3 h-12 px-6 rounded-lg border border-gray-200 bg-white text-gray-800 text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm"
@@ -83,12 +76,19 @@ export default function LandingPage() {
               <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
             </svg>
-            Continue with college Google account
+            Sign in with college Google account
           </button>
+          <p className="text-xs text-gray-400">
+            Only <span className="font-medium text-gray-500">@ds.study.iitm.ac.in</span> emails are accepted
+          </p>
+          {domainBlocked && (
+            <div className="mt-1 max-w-sm w-full rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700 text-left">
+              <span className="font-semibold">Access denied.</span> Only IITM BS student emails
+              (<span className="font-mono text-[12px]">@ds.study.iitm.ac.in</span>) can sign in.
+              Please use your official college Google account.
+            </div>
+          )}
         </div>
-        <p className="mt-3 text-xs text-gray-400">
-          Only @ds.study.iitm.ac.in emails are accepted.
-        </p>
       </section>
 
       {/* Features */}

@@ -12,7 +12,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { Empty } from '@/components/ui/Empty';
 import { toast } from 'sonner';
 import { Bug, Lightbulb, HelpCircle } from 'lucide-react';
-import { formatDate } from '@/lib/utils';
+import { formatDate, toUserMessage } from '@/lib/utils';
 import type { TicketStatus, TicketWithProfile } from '@/lib/database.types';
 
 const kindIcon = { bug: Bug, suggestion: Lightbulb, question: HelpCircle };
@@ -30,10 +30,21 @@ export default function AdminTickets() {
   const { data: tickets = [], isLoading } = useQuery({
     queryKey: ['admin-tickets', statusFilter],
     queryFn: async () => {
-      let q = supabase.from('tickets').select('*, profile:profiles(full_name,email)').order('created_at', { ascending: false });
+      let q = supabase.from('tickets').select('*').order('created_at', { ascending: false });
       if (statusFilter !== 'all') q = q.eq('status', statusFilter);
-      const { data } = await q;
-      return (data ?? []) as TicketWithProfile[];
+      const { data: rows } = await q;
+      if (!rows?.length) return [] as TicketWithProfile[];
+
+      const userIds = [...new Set(rows.map(t => t.user_id).filter(Boolean))];
+      const { data: profiles } = userIds.length
+        ? await supabase.from('profiles').select('id, full_name, email').in('id', userIds)
+        : { data: [] };
+      const profileMap = new Map((profiles ?? []).map(p => [p.id, p]));
+
+      return rows.map(t => ({
+        ...t,
+        profile: t.user_id ? (profileMap.get(t.user_id) ?? null) : null,
+      })) as TicketWithProfile[];
     }
   });
 
@@ -47,7 +58,7 @@ export default function AdminTickets() {
       setSelected(null); setReply('');
       toast.success('Ticket updated');
     },
-    onError: (e: any) => toast.error(e?.message ?? 'Failed')
+    onError: (e: unknown) => toast.error(toUserMessage(e, 'Failed to update ticket'))
   });
 
   return (

@@ -19,7 +19,12 @@ export default function AdminStudents() {
   const { data: students = [], isLoading } = useQuery({
     queryKey: ['admin-students'],
     queryFn: async () => {
-      const { data } = await supabase.from('profiles').select('*').eq('role', 'student').order('created_at');
+      // Exclude push_subscription (contains browser push endpoint + auth keys — not needed here)
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, email, full_name, avatar_url, roll_number, level, role, onboarded, last_seen_at, created_at')
+        .eq('role', 'student')
+        .order('created_at');
       return (data ?? []) as Profile[];
     }
   });
@@ -29,12 +34,17 @@ export default function AdminStudents() {
   );
 
   const exportCsv = () => {
+    const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
     const header = 'Name,Email,Roll Number,Level,Onboarded,Last Seen\n';
     const rows = students.map(s =>
-      `"${s.full_name ?? ''}","${s.email}","${s.roll_number ?? ''}","${s.level ?? ''}","${s.onboarded}","${s.last_seen_at ? formatDate(s.last_seen_at) : ''}"`
+      [s.full_name ?? '', s.email, s.roll_number ?? '', s.level ?? '', String(s.onboarded), s.last_seen_at ? formatDate(s.last_seen_at) : '']
+        .map(esc).join(',')
     ).join('\n');
     const blob = new Blob([header + rows], { type: 'text/csv' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'students.csv'; a.click();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'students.csv'; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
   };
 
   return (

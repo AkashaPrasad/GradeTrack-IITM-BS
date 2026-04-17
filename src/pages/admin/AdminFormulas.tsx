@@ -12,6 +12,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { toast } from 'sonner';
 import { validateFormula } from '@/lib/grading/formula';
 import { compileFormula } from '@/lib/grading/formula';
+import { toUserMessage } from '@/lib/utils';
 import type { Subject, Term } from '@/lib/database.types';
 
 export default function AdminFormulas() {
@@ -47,7 +48,7 @@ export default function AdminFormulas() {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-subjects-formulas'] }); setEditingId(null); toast.success('Formula saved'); },
-    onError: (e: any) => toast.error(e?.message ?? 'Failed')
+    onError: (e: unknown) => toast.error(toUserMessage(e, 'Failed to save formula'))
   });
 
   return (

@@ -50,12 +50,14 @@ export default function Support() {
 
   const submit = useMutation({
     mutationFn: async () => {
-      if (!title.trim()) throw new Error('Title is required');
+      if (!profile?.id) throw new Error('Not signed in');
+      const trimmedTitle = title.trim().slice(0, 200);
+      if (!trimmedTitle) throw new Error('Title is required');
       const { error } = await supabase.from('tickets').insert({
-        user_id: profile!.id,
+        user_id: profile.id,
         kind,
-        title: title.trim(),
-        body: body.trim() || null
+        title: trimmedTitle,
+        body: body.trim().slice(0, 5000) || null
       });
       if (error) throw error;
     },
@@ -64,7 +66,10 @@ export default function Support() {
       setTitle(''); setBody('');
       qc.invalidateQueries({ queryKey: ['my-tickets', profile?.id] });
     },
-    onError: (e: any) => toast.error(e?.message ?? 'Failed to submit')
+    onError: (e: unknown) => {
+      const msg = e instanceof Error ? e.message : null;
+      toast.error(msg === 'Title is required' || msg === 'Not signed in' ? msg : 'Failed to submit. Please try again.');
+    }
   });
 
   return (
@@ -100,12 +105,14 @@ export default function Support() {
               placeholder="Title — what's the issue?"
               value={title}
               onChange={e => setTitle(e.target.value)}
+              maxLength={200}
             />
             <Textarea
               placeholder="Details (optional) — steps to reproduce, expected behaviour, your suggestion…"
               value={body}
               onChange={e => setBody(e.target.value)}
               rows={4}
+              maxLength={5000}
             />
             <Button size="sm" onClick={() => submit.mutate()} loading={submit.isPending}>
               Submit ticket

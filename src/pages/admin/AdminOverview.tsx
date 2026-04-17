@@ -27,11 +27,11 @@ export default function AdminOverview() {
     refetchInterval: 30_000,
   });
 
-  if (isLoading) return (
+  if (isLoading || !stats) return (
     <div className="p-5 space-y-4"><Skeleton className="h-6 w-40" /><div className="grid gap-4 md:grid-cols-4">{[...Array(4)].map((_, i) => <SkeletonCard key={i} />)}</div></div>
   );
 
-  const s = stats!;
+  const s = stats;
   const now = new Date();
   const weekAgo = new Date(now.getTime() - 7 * 86400000);
   const activeThisWeek = s.students.filter(u => u.last_seen_at && new Date(u.last_seen_at) > weekAgo).length;

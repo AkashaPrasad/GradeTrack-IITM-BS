@@ -5,7 +5,6 @@ import { AppShell } from '@/components/layout/AppShell';
 import { useAuth } from '@/stores/auth';
 import { useTheme } from '@/stores/theme';
 import LandingPage from '@/pages/LandingPage';
-import Login from '@/pages/Login';
 import AuthCallback from '@/pages/AuthCallback';
 import Dashboard from '@/pages/Dashboard';
 import Grades from '@/pages/Grades';
@@ -58,7 +57,7 @@ export default function App() {
       <Boot />
       <Routes>
         <Route path="/" element={<IndexRedirect />} />
-        <Route path="/login" element={<Login />} />
+        <Route path="/login" element={<IndexRedirect />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
 
         <Route
