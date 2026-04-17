@@ -1,5 +1,5 @@
-import { NavLink, Outlet } from 'react-router-dom';
-import { BarChart2, BookOpen, Calendar, Users, FileText, Ticket, FlaskConical, Bell, LayoutDashboard } from 'lucide-react';
+import { NavLink, Link, Outlet } from 'react-router-dom';
+import { BarChart2, BookOpen, Calendar, Users, FileText, Ticket, FlaskConical, Bell, LayoutDashboard, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
@@ -36,10 +36,24 @@ export default function AdminShell() {
             </NavLink>
           ))}
         </nav>
+        <div className="mt-auto px-2 pb-4 border-t border-border pt-3">
+          <Link
+            to="/dashboard"
+            className="flex items-center gap-2 h-8 px-2.5 rounded-md text-[13px] font-medium text-fgmuted hover:text-fg hover:bg-surface2/60 transition-colors"
+          >
+            <ArrowLeft className="h-[15px] w-[15px]" />Back to Dashboard
+          </Link>
+        </div>
       </aside>
       {/* Mobile: horizontal scroll nav */}
       <div className="flex flex-col flex-1 overflow-hidden">
         <div className="md:hidden flex gap-1 overflow-x-auto px-3 py-2 border-b border-border scrollbar-thin">
+          <Link
+            to="/dashboard"
+            className="flex items-center gap-1.5 shrink-0 px-3 h-8 rounded-md text-[12px] font-medium whitespace-nowrap text-fgmuted"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />Dashboard
+          </Link>
           {nav.map(({ to, label, icon: Icon, end }) => (
             <NavLink key={to} to={to} end={end}
               className={({ isActive }) =>

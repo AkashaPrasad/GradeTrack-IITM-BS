@@ -72,7 +72,7 @@ export default function AdminTickets() {
             {tickets.map(t => {
               const Icon = kindIcon[t.kind];
               return (
-                <Dialog key={t.id} open={selected?.id === t.id} onOpenChange={o => { if (!o) { setSelected(null); setReply(''); } }}>
+                <Dialog key={t.id} open={selected?.id === t.id} onOpenChange={o => { if (o) setSelected(t); else { setSelected(null); setReply(''); } }}>
                   <DialogTrigger asChild>
                     <Card className="cursor-pointer hover:bg-surface2 transition-colors">
                       <CardBody className="py-3 flex items-start gap-3">

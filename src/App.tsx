@@ -4,6 +4,7 @@ import { AuthGuard, AdminGuard } from '@/components/auth/AuthGuard';
 import { AppShell } from '@/components/layout/AppShell';
 import { useAuth } from '@/stores/auth';
 import { useTheme } from '@/stores/theme';
+import LandingPage from '@/pages/LandingPage';
 import Login from '@/pages/Login';
 import AuthCallback from '@/pages/AuthCallback';
 import Dashboard from '@/pages/Dashboard';
@@ -26,7 +27,8 @@ import AdminPush from '@/pages/admin/AdminPush';
 
 function IndexRedirect() {
   const session = useAuth(s => s.session);
-  return <Navigate to={session ? '/dashboard' : '/login'} replace />;
+  if (session) return <Navigate to="/dashboard" replace />;
+  return <LandingPage />;
 }
 
 function Boot() {

@@ -22,6 +22,7 @@
     },
     "types": ["vite/client", "vite-plugin-pwa/client"]
   },
-  "include": ["src", "supabase/functions"],
+  "include": ["src"],
+  "exclude": ["supabase"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

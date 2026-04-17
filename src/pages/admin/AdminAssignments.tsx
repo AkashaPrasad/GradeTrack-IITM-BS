@@ -182,10 +182,10 @@ function AssignmentDialog({ a, subjects, onSave, loading, onClose }: any) {
         </div>
         <div>
           <Label>Level (leave blank for both)</Label>
-          <Select value={form.level ?? ''} onValueChange={v => set('level', v || null)}>
+          <Select value={form.level ?? '__none__'} onValueChange={v => set('level', v === '__none__' ? null : v)}>
             <SelectTrigger className="mt-1 w-full"><SelectValue placeholder="Both" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Both</SelectItem>
+              <SelectItem value="__none__">Both</SelectItem>
               <SelectItem value="foundation">Foundation</SelectItem>
               <SelectItem value="diploma">Diploma</SelectItem>
             </SelectContent>
@@ -193,10 +193,10 @@ function AssignmentDialog({ a, subjects, onSave, loading, onClose }: any) {
         </div>
         <div>
           <Label>Subject (optional)</Label>
-          <Select value={form.subject_id ?? ''} onValueChange={v => set('subject_id', v || null)}>
+          <Select value={form.subject_id ?? '__none__'} onValueChange={v => set('subject_id', v === '__none__' ? null : v)}>
             <SelectTrigger className="mt-1 w-full"><SelectValue placeholder="All subjects" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All subjects</SelectItem>
+              <SelectItem value="__none__">All subjects</SelectItem>
               {subjects.map((s: Subject) => <SelectItem key={s.id} value={s.id}>{s.code} — {s.name}</SelectItem>)}
             </SelectContent>
           </Select>

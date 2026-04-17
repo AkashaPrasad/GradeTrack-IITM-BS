@@ -1,3 +1,5 @@
+import webPush from "npm:web-push@3.6.7";
+
 declare const Deno: {
   env: { get(name: string): string | undefined };
   serve(handler: (req: Request) => Response | Promise<Response>): void;
@@ -105,26 +107,29 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const vapidPublicKey = Deno.env.get('VAPID_PUBLIC_KEY');
+    const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY');
+    const vapidSubject = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:noreply@example.com';
+
+    if (!vapidPublicKey || !vapidPrivateKey) {
+      throw new Error('VAPID keys not configured. Set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY in edge function secrets.');
+    }
+
+    webPush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+
     const authHeader = req.headers.get('Authorization');
+    const apiKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    const baseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+
+    const headers = {
+      Authorization: authHeader ?? `Bearer ${apiKey}`,
+      apikey: apiKey,
+    };
+
     const [profilesRes, assignmentsRes, enrolmentsRes] = await Promise.all([
-      fetch(`${Deno.env.get('SUPABASE_URL')}/rest/v1/profiles?select=id,email,level,push_subscription,notify_assignments,notify_exams&push_subscription=not.is.null`, {
-        headers: {
-          Authorization: authHeader ?? `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-          apikey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-        },
-      }),
-      fetch(`${Deno.env.get('SUPABASE_URL')}/rest/v1/assignments?select=id,title,category,subject_id,foundation_deadline,degree_diploma_deadline,exam_date,level,comments&is_published=eq.true`, {
-        headers: {
-          Authorization: authHeader ?? `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-          apikey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-        },
-      }),
-      fetch(`${Deno.env.get('SUPABASE_URL')}/rest/v1/enrolments?select=user_id,subject_id`, {
-        headers: {
-          Authorization: authHeader ?? `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-          apikey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-        },
-      }),
+      fetch(`${baseUrl}/rest/v1/profiles?select=id,email,level,push_subscription,notify_assignments,notify_exams&push_subscription=not.is.null`, { headers }),
+      fetch(`${baseUrl}/rest/v1/assignments?select=id,title,category,subject_id,foundation_deadline,degree_diploma_deadline,exam_date,level,comments&is_published=eq.true`, { headers }),
+      fetch(`${baseUrl}/rest/v1/enrolments?select=user_id,subject_id`, { headers }),
     ]);
 
     if (!profilesRes.ok) throw new Error(`Profiles fetch failed: ${await profilesRes.text()}`);
@@ -134,6 +139,7 @@ Deno.serve(async (req: Request) => {
     const profiles = (await profilesRes.json()) as ProfileRow[];
     const assignments = (await assignmentsRes.json()) as AssignmentRow[];
     const enrolments = (await enrolmentsRes.json()) as EnrolmentRow[];
+
     const enrolmentsByUser = new Map<string, Set<string>>();
     for (const enrolment of enrolments) {
       const subjectIds = enrolmentsByUser.get(enrolment.user_id) ?? new Set<string>();
@@ -144,12 +150,14 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({} as Json));
     const testMode = body.testMode === true;
     let candidateCount = 0;
-    const sent = [] as Array<{ userId: string; endpoint: string; kind: string }>;
+    const sent: Array<{ userId: string; endpoint: string; kind: string }> = [];
+    const failed: Array<{ userId: string; error: string }> = [];
 
     for (const profile of profiles) {
       if (!isPushSubscription(profile.push_subscription)) continue;
-      const endpoint = profile.push_subscription.endpoint;
-      if (!endpoint) continue;
+      const sub = profile.push_subscription;
+      if (!sub.endpoint) continue;
+
       const enrolledSubjectIds = enrolmentsByUser.get(profile.id) ?? new Set<string>();
 
       for (const assignment of assignments) {
@@ -158,6 +166,7 @@ Deno.serve(async (req: Request) => {
         const targetDate = deadlineForAssignment(assignment, profile.level);
         const days = daysUntil(targetDate);
         if (days === null) continue;
+
         if (assignment.exam_date) {
           if (days !== 7 && days !== 1) continue;
         } else if (days !== 3 && days !== 1) {
@@ -167,36 +176,43 @@ Deno.serve(async (req: Request) => {
         candidateCount += 1;
 
         const message = testMode && typeof body.title === 'string' && typeof body.body === 'string'
-          ? { kind: 'test', title: body.title, body: body.body }
+          ? { kind: 'test', title: body.title as string, body: body.body as string }
           : buildMessage(assignment, profile.level);
 
         if (message.kind === 'assignment' && profile.notify_assignments === false) continue;
         if (message.kind === 'exam' && profile.notify_exams === false) continue;
 
-        // Stub dispatch: keep the function deployable without requiring extra npm modules.
-        // In production, replace this with web-push dispatch using VAPID keys.
-        console.log('Would send push notification', {
-          userId: profile.id,
-          endpoint,
-          title: message.title,
-          body: message.body,
-          assignmentId: assignment.id,
-        });
-
-        sent.push({ userId: profile.id, endpoint, kind: String(message.kind) });
+        try {
+          await webPush.sendNotification(
+            sub as webPush.PushSubscription,
+            JSON.stringify({
+              title: message.title,
+              body: message.body,
+              icon: '/icons/icon-192.png',
+              badge: '/icons/icon-192.png',
+              tag: `gradetrack-${assignment.id}`,
+              url: '/',
+            })
+          );
+          sent.push({ userId: profile.id, endpoint: sub.endpoint, kind: String(message.kind) });
+        } catch (pushErr) {
+          const errMsg = pushErr instanceof Error ? pushErr.message : String(pushErr);
+          console.error('Push failed for', profile.id, errMsg);
+          failed.push({ userId: profile.id, error: errMsg });
+        }
 
         if (testMode) break;
       }
     }
 
-    return new Response(JSON.stringify({ ok: true, candidateCount, sentCount: sent.length, sent }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200,
-    });
+    return new Response(
+      JSON.stringify({ ok: true, candidateCount, sentCount: sent.length, failedCount: failed.length, sent, failed }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+    );
   } catch (error) {
-    return new Response(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : 'Unknown error' }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500,
-    });
+    return new Response(
+      JSON.stringify({ ok: false, error: error instanceof Error ? error.message : 'Unknown error' }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+    );
   }
 });

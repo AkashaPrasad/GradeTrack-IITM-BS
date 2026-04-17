@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 340" width="300" height="340">
+  <!-- Graduation cap -->
+  <polygon points="150,28 248,66 150,104 52,66" fill="#1a1a1a"/>
+  <rect x="243" y="66" width="7" height="44" rx="3" fill="#1a1a1a"/>
+  <path d="M250,110 Q266,118 268,134" stroke="#C4920E" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+  <circle cx="268" cy="137" r="6" fill="#C4920E"/>
+
+  <!-- Book left cover -->
+  <path d="M150,112 C122,112 72,124 46,152 L46,220 C72,196 122,184 150,184 Z" fill="#7a1422"/>
+  <!-- Book right cover -->
+  <path d="M150,112 C178,112 228,124 254,152 L254,220 C228,196 178,184 150,184 Z" fill="#7a1422"/>
+  <!-- Left page highlight -->
+  <path d="M150,112 C126,112 84,122 62,146 L62,206 C84,184 126,174 150,174 Z" fill="#d4730f" opacity="0.5"/>
+  <!-- Right page highlight -->
+  <path d="M150,112 C174,112 216,122 238,146 L238,206 C216,184 174,174 150,174 Z" fill="#d4730f" opacity="0.45"/>
+  <!-- Spine -->
+  <line x1="150" y1="112" x2="150" y2="184" stroke="#5a0e18" stroke-width="2.5"/>
+  <!-- Bottom book covers -->
+  <path d="M46,220 C72,200 122,190 150,190 L150,184 C122,184 72,196 46,220 Z" fill="#5a0e18"/>
+  <path d="M254,220 C228,200 178,190 150,190 L150,184 C178,184 228,196 254,220 Z" fill="#5a0e18"/>
+
+  <!-- Flame on book -->
+  <path d="M128,162 Q122,150 128,138 Q133,148 126,154 Q137,142 143,130 Q147,143 140,152 Q150,140 156,130 Q160,146 150,156 Q157,147 164,142 Q161,160 148,167 Q137,172 128,162 Z" fill="#E8830A"/>
+  <path d="M135,160 Q131,153 135,146 Q139,152 133,156 Q140,149 144,142 Q146,150 142,155 Q147,148 150,143 Q152,152 147,157 Z" fill="#F5C040" opacity="0.85"/>
+
+  <!-- Bar chart (right side of book) -->
+  <rect x="172" y="170" width="11" height="14" rx="2" fill="#C4920E"/>
+  <rect x="187" y="158" width="11" height="26" rx="2" fill="#d4730f"/>
+  <rect x="202" y="144" width="11" height="40" rx="2" fill="#7a1422"/>
+  <!-- Arrow -->
+  <polyline points="207,140 218,128 222,138" stroke="#C4920E" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+
+  <!-- IITM BS -->
+  <text x="150" y="244" font-family="Georgia, 'Times New Roman', serif" font-weight="bold" font-size="28" text-anchor="middle" fill="#7a1422" letter-spacing="3">IITM BS</text>
+  <!-- Decorative lines around GradeTrack -->
+  <line x1="52" y1="264" x2="100" y2="264" stroke="#C4920E" stroke-width="1.5"/>
+  <line x1="200" y1="264" x2="248" y2="264" stroke="#C4920E" stroke-width="1.5"/>
+  <!-- GradeTrack -->
+  <text x="150" y="268" font-family="Georgia, 'Times New Roman', serif" font-size="16" text-anchor="middle" fill="#C4920E" letter-spacing="1.5">GradeTrack</text>
+</svg>

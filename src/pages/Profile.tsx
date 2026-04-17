@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useTitle } from '@/lib/hooks';
 import { useAuth } from '@/stores/auth';
@@ -6,12 +7,14 @@ import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Label } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { Switch } from '@/components/ui/Switch';
 import { ThemeToggle } from '@/components/layout/ThemeToggle';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/Select';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
-import { LogOut } from 'lucide-react';
+import { LogOut, Bell, BellOff } from 'lucide-react';
 import { initialOf } from '@/lib/utils';
+
 
 const stagger = { hidden: {}, visible: { transition: { staggerChildren: 0.04 } } };
 const fadeUp = { hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } };
@@ -21,6 +24,7 @@ export default function Profile() {
   const { profile, updateProfile, signOut } = useAuth();
   const { data: enrolments = [] } = useMyEnrolments();
   const nav = useNavigate();
+  const [notifLoading, setNotifLoading] = useState(false);
 
   const changeLevel = async (val: string) => {
     try {
@@ -29,6 +33,46 @@ export default function Profile() {
       nav('/onboarding');
     } catch {
       toast.error('Failed to update level');
+    }
+  };
+
+  const hasNotifications = !!profile?.push_subscription;
+
+  const toggleNotifications = async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      toast.error('Push notifications are not supported in this browser.');
+      return;
+    }
+    setNotifLoading(true);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      if (hasNotifications) {
+        const existing = await reg.pushManager.getSubscription();
+        if (existing) await existing.unsubscribe();
+        await updateProfile({ push_subscription: null });
+        toast.success('Notifications disabled.');
+      } else {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+          toast.error('Notification permission denied. Enable it in your browser settings.');
+          return;
+        }
+        const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
+        if (!vapidKey) {
+          toast.error('VAPID public key not configured. Add VITE_VAPID_PUBLIC_KEY to your .env file.');
+          return;
+        }
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: vapidKey,
+        });
+        await updateProfile({ push_subscription: sub.toJSON() as any });
+        toast.success('Notifications enabled! You will be notified before deadlines.');
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Failed to update notifications');
+    } finally {
+      setNotifLoading(false);
     }
   };
 
@@ -89,6 +133,50 @@ export default function Profile() {
                 Change courses
               </Button>
             </div>
+          </CardBody>
+        </Card>
+      </motion.div>
+
+      {/* Notifications */}
+      <motion.div variants={fadeUp}>
+        <Card>
+          <CardHeader><CardTitle>Notifications</CardTitle></CardHeader>
+          <CardBody className="space-y-3">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2.5">
+                {hasNotifications
+                  ? <Bell className="h-4 w-4 text-success" />
+                  : <BellOff className="h-4 w-4 text-fgmuted" />
+                }
+                <div>
+                  <div className="text-sm font-medium">
+                    {hasNotifications ? 'Notifications are on' : 'Notifications are off'}
+                  </div>
+                  <div className="text-[12px] text-fgmuted">
+                    Get reminded 1 day and 3 days before assignment deadlines, and 1 and 7 days before exams.
+                  </div>
+                </div>
+              </div>
+              <Switch checked={hasNotifications} onCheckedChange={toggleNotifications} disabled={notifLoading} />
+            </div>
+            {hasNotifications && (
+              <div className="flex flex-wrap gap-3 pt-1">
+                <label className="flex items-center gap-2 text-sm">
+                  <Switch
+                    checked={profile?.notify_assignments ?? true}
+                    onCheckedChange={v => updateProfile({ notify_assignments: v })}
+                  />
+                  Assignment reminders
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <Switch
+                    checked={profile?.notify_exams ?? true}
+                    onCheckedChange={v => updateProfile({ notify_exams: v })}
+                  />
+                  Exam reminders
+                </label>
+              </div>
+            )}
           </CardBody>
         </Card>
       </motion.div>
