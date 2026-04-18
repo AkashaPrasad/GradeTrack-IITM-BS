@@ -11,8 +11,8 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton, SkeletonCard } from '@/components/ui/Skeleton';
 import { Empty } from '@/components/ui/Empty';
 import { daysUntil, formatDate, percentage } from '@/lib/utils';
-import { filterWeeklyAssignmentsForEnrolledSubjects, formatWeeklyAssignmentLabel } from '@/lib/assignments';
-import type { Assignment, AssignmentCompletion } from '@/lib/database.types';
+import { filterAssignmentsForEnrolledSubjects, filterWeeklyAssignmentsForEnrolledSubjects, formatWeeklyAssignmentLabel, normalizeOppeTitle } from '@/lib/assignments';
+import type { Assignment, AssignmentCompletion, Subject } from '@/lib/database.types';
 
 const stagger = { hidden: {}, visible: { transition: { staggerChildren: 0.04 } } };
 const fadeUp = { hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } };
@@ -54,16 +54,12 @@ export default function Assignments() {
     [allAssignments, enrolledSubjectIds]
   );
 
-  // Exam assignments — non-weekly categories
-  // Filter OPPE out if none of the user's enrolled subjects actually have an OPPE component
-  const userHasOppe = useMemo(() => subjects.some(s => s.grading_config?.hasOppe), [subjects]);
   const examAssignments = useMemo(() =>
-    allAssignments.filter(a => {
-      if (!EXAM_CATEGORIES.includes(a.category)) return false;
-      if (a.category === 'oppe' && !userHasOppe) return false;
-      return true;
-    }),
-    [allAssignments, userHasOppe]
+    filterAssignmentsForEnrolledSubjects(
+      allAssignments.filter(a => EXAM_CATEGORIES.includes(a.category)),
+      enrolledSubjectIds,
+    ),
+    [allAssignments, enrolledSubjectIds]
   );
 
   // Count for progress bar (only weekly)
@@ -149,9 +145,10 @@ export default function Assignments() {
       {tab === 'exams' && (
         <ExamList
           assignments={examAssignments}
-          allOppeAssignments={allAssignments.filter(a => a.category === 'oppe')}
+          allOppeAssignments={examAssignments.filter(a => a.category === 'oppe')}
           completionMap={completionMap}
           level={profile?.level}
+          subjects={subjects}
           toggle={toggle}
         />
       )}
@@ -345,13 +342,16 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 const CATEGORY_ORDER = ['quiz', 'oppe', 'endterm', 'roe', 'bpt', 'ka', 'project', 'bonus', 'extra'];
 
-function ExamList({ assignments, allOppeAssignments, completionMap, level, toggle }: {
+function ExamList({ assignments, allOppeAssignments, completionMap, level, subjects, toggle }: {
   assignments: Assignment[];
   allOppeAssignments: Assignment[];
   completionMap: Map<string, AssignmentCompletion>;
   level: string | null | undefined;
+  subjects: Subject[];
   toggle: ReturnType<typeof useToggleCompletion>;
 }) {
+  const subjectMap = useMemo(() => new Map(subjects.map(subject => [subject.id, subject])), [subjects]);
+
   // OPPE bases that have a Day 3 or beyond — these are multi-day sessions (OPPE 2) and must NOT be merged
   const oppeMultiDayBases = useMemo(() => {
     const s = new Set<string>();
@@ -388,11 +388,11 @@ function ExamList({ assignments, allOppeAssignments, completionMap, level, toggl
             const base = m[1];
             if (!seen.has(base)) {
               seen.add(base);
-              merged.push({ ...a, title: `${base} — Day 1/2` });
+              merged.push({ ...a, title: normalizeOppeTitle(a.title) });
             }
             // skip the Day 2 duplicate
           } else {
-            merged.push(a);
+            merged.push(a.category === 'oppe' ? { ...a, title: normalizeOppeTitle(a.title) } : a);
           }
         }
         map.set(cat, merged);
@@ -434,6 +434,11 @@ function ExamList({ assignments, allOppeAssignments, completionMap, level, toggl
                         <div className={`text-sm font-medium ${attended ? 'line-through text-fgmuted' : ''}`}>
                           {a.title}
                         </div>
+                        {a.subject_id && subjectMap.get(a.subject_id) && (
+                          <div className="text-[12px] text-fgmuted mt-0.5">
+                            {subjectMap.get(a.subject_id)?.name}
+                          </div>
+                        )}
                         <div className="flex flex-wrap items-center gap-1.5 mt-1">
                           <Badge variant="muted">{CATEGORY_LABELS[a.category] ?? a.category}</Badge>
                           {date && <span className="text-[11px] text-fgmuted">{a.exam_date ? 'Exam' : 'Due'} {formatDate(date)}</span>}

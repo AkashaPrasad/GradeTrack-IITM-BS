@@ -95,3 +95,6 @@ temp/
 *.temp
 *.bak
 *.orig
+
+# ─── Local Backups / DB Dumps ────────────────────────────────────────────────
+backups/

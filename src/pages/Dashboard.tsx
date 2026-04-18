@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Progress } from '@/components/ui/Progress';
 import { Skeleton, SkeletonCard } from '@/components/ui/Skeleton';
 import { useActiveTerm, useAssignments, useMyCompletions, useMyGrades, useMySubjects, useRealtimeAssignments, useToggleCompletion } from '@/hooks/useData';
-import { filterWeeklyAssignmentsForEnrolledSubjects, formatWeeklyAssignmentLabel } from '@/lib/assignments';
+import { filterAssignmentsForEnrolledSubjects, filterWeeklyAssignmentsForEnrolledSubjects, formatWeeklyAssignmentLabel, normalizeOppeTitle } from '@/lib/assignments';
 import { calculateScore, checkEligibility } from '@/lib/grading/calculator';
 import { daysUntil, formatDate, percentage } from '@/lib/utils';
 import type { Assignment, AssignmentCompletion } from '@/lib/database.types';
@@ -152,6 +152,11 @@ export default function Dashboard() {
     () => filterWeeklyAssignmentsForEnrolledSubjects(assignments, enrolledSubjectIds),
     [assignments, enrolledSubjectIds]
   );
+  const visibleAssignments = useMemo(
+    () => filterAssignmentsForEnrolledSubjects(assignments, enrolledSubjectIds),
+    [assignments, enrolledSubjectIds]
+  );
+  const subjectMap = useMemo(() => new Map(subjects.map(subject => [subject.id, subject])), [subjects]);
 
   const weeklyAssignmentIds = useMemo(
     () => new Set(weeklyAssignments.map(a => a.id)),
@@ -177,7 +182,7 @@ export default function Dashboard() {
 
   // Upcoming exams (quiz/oppe/endterm only) — next 14 days, with OPPE Day 1/2 merged
   const upcomingExams = useMemo(() => {
-    const raw = assignments
+    const raw = visibleAssignments
       .filter(a => EXAM_CATS.includes(a.category))
       .map(a => {
         const dl = a.exam_date ?? deadlineFor(a, profile?.level);
@@ -189,7 +194,7 @@ export default function Dashboard() {
     // Merge OPPE "Day 1" and "Day 2" ONLY for 2-day exam sessions (e.g. OPPE 1).
     // Sessions with Day 3+ (e.g. OPPE 2 which spans 4 days) must stay as separate entries.
     const oppeMultiDayBases = new Set(
-      assignments
+      visibleAssignments
         .filter(a => a.category === 'oppe' && /Day\s+[3-9]/i.test(a.title))
         .map(a => { const m = a.title.match(/^(.+?)\s+Day\s+\d+$/i); return m ? m[1] : ''; })
         .filter(Boolean)
@@ -203,15 +208,15 @@ export default function Dashboard() {
           const base = match[1];
           if (!seenOppeBases.has(base)) {
             seenOppeBases.add(base);
-            result.push({ ...a, title: `${base} — Day 1/2` });
+            result.push({ ...a, title: normalizeOppeTitle(a.title) });
           }
           continue; // skip the Day 2 duplicate
         }
       }
-      result.push(a);
+      result.push(a.category === 'oppe' ? { ...a, title: normalizeOppeTitle(a.title) } : a);
     }
     return result.slice(0, 8);
-  }, [assignments, profile?.level]);
+  }, [profile?.level, visibleAssignments]);
 
   // Stats
   const totalWeekly = weeklyAssignments.length;
@@ -353,6 +358,11 @@ export default function Dashboard() {
                 <CardBody className="py-2.5 flex items-center justify-between gap-2">
                   <div>
                     <div className="text-sm font-medium">{a.title}</div>
+                    {a.subject_id && subjectMap.get(a.subject_id) && (
+                      <div className="text-[12px] text-fgmuted mt-0.5">
+                        {subjectMap.get(a.subject_id)?.name}
+                      </div>
+                    )}
                     <div className="flex items-center gap-2 mt-0.5">
                       <Badge variant="muted">{CATEGORY_LABELS[a.category] ?? a.category}</Badge>
                       {a.deadline && <span className="text-[11px] text-fgmuted">{a.exam_date ? 'Exam' : 'Due'} {formatDate(a.deadline)}</span>}
