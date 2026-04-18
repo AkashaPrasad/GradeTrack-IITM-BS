@@ -1,11 +1,13 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { MobileTabs } from './MobileTabs';
+import { NotificationBell } from './NotificationBell';
 import { OfflineBanner } from '../OfflineBanner';
 import { InstallPrompt } from '../InstallPrompt';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { useAuth } from '@/stores/auth';
 import { initialOf } from '@/lib/utils';
+
 
 function MobileHeader() {
   const { profile } = useAuth();
@@ -17,16 +19,26 @@ function MobileHeader() {
         </div>
         <span className="text-[13px] font-semibold tracking-tighter">GradeTrack</span>
       </div>
-      {/* Profile icon — links to profile page */}
-      <NavLink to="/profile" className="flex items-center">
-        {profile?.avatar_url ? (
-          <img src={profile.avatar_url} alt="" className="h-8 w-8 rounded-full border-2 border-border" />
-        ) : (
-          <div className="h-8 w-8 rounded-full bg-surface2 border border-border text-fgmuted grid place-items-center text-[12px] font-medium">
-            {initialOf(profile?.full_name ?? profile?.email ?? '·')}
-          </div>
-        )}
-      </NavLink>
+      <div className="flex items-center gap-1">
+        <NotificationBell />
+        <NavLink to="/profile" className="flex items-center ml-1">
+          {profile?.avatar_url ? (
+            <img src={profile.avatar_url} alt="" className="h-8 w-8 rounded-full border-2 border-border" />
+          ) : (
+            <div className="h-8 w-8 rounded-full bg-surface2 border border-border text-fgmuted grid place-items-center text-[12px] font-medium">
+              {initialOf(profile?.full_name ?? profile?.email ?? '·')}
+            </div>
+          )}
+        </NavLink>
+      </div>
+    </header>
+  );
+}
+
+function DesktopTopBar() {
+  return (
+    <header className="hidden md:flex sticky top-0 z-30 items-center justify-end px-5 h-12 border-b border-border bg-surface/80 backdrop-blur-md shrink-0">
+      <NotificationBell />
     </header>
   );
 }
@@ -38,6 +50,7 @@ export function AppShell() {
       <Sidebar />
       <div className="flex-1 flex flex-col min-h-0">
         <MobileHeader />
+        <DesktopTopBar />
         <main className="flex-1 overflow-y-auto pb-20 md:pb-0 scrollbar-thin">
           <ErrorBoundary>
             <Outlet />

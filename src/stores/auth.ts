@@ -53,16 +53,47 @@ export const useAuth = create<AuthState>((set, get) => ({
     }
     set({ initializing: false });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      // Explicit sign-out — clear everything
+      if (event === 'SIGNED_OUT') {
+        set({ session: null, user: null, profile: null, profileResolved: true });
+        return;
+      }
+
       if (newSession?.user) {
         if (!emailIsAllowed(newSession.user.email)) {
           await supabase.auth.signOut();
           set({ session: null, user: null, profile: null, domainBlocked: true, profileResolved: true });
           return;
         }
-        set({ session: newSession, user: newSession.user, domainBlocked: false, profileResolved: false });
-        await get().refreshProfile();
-      } else {
+
+        // Always keep the session/user token current
+        set({ session: newSession, user: newSession.user, domainBlocked: false });
+
+        // Supabase fires SIGNED_IN on every token refresh, tab return, and
+        // hard-reload — not just on explicit sign-in. Calling refreshProfile()
+        // every time is wasteful and risks hanging if Supabase's internal token
+        // fetch stalls, which leaves the loading screen up forever.
+        //
+        // Rules:
+        //   SIGNED_IN  + no profile  → show loading, fetch profile
+        //   SIGNED_IN  + has profile → skip (profile is already current)
+        //   USER_UPDATED             → silently re-fetch in background (no loading)
+        //   anything else + no profile → silently recover
+        if (event === 'SIGNED_IN') {
+          if (!get().profile) {
+            set({ profileResolved: false });
+            await get().refreshProfile();
+          }
+          // profile already loaded — nothing to do
+        } else if (event === 'USER_UPDATED') {
+          void get().refreshProfile(); // background, never shows loading
+        } else if (!get().profile) {
+          // TOKEN_REFRESHED or INITIAL_SESSION with missing profile — recover silently
+          await get().refreshProfile();
+        }
+      } else if (event !== 'INITIAL_SESSION') {
+        // Catch-all for any other signed-out state (TOKEN_REFRESH failure, etc.)
         set({ session: null, user: null, profile: null, profileResolved: true });
       }
     });
@@ -94,31 +125,36 @@ export const useAuth = create<AuthState>((set, get) => ({
     }
 
     let profile: Profile | null = null;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .maybeSingle();
+    try {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        // Race each DB call against a 5-second timeout so a hung Supabase fetch
+        // (e.g. internal token-refresh race in the JS client) never blocks forever.
+        const { data, error } = await Promise.race([
+          supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(),
+          new Promise<{ data: null; error: Error }>(resolve =>
+            window.setTimeout(() => resolve({ data: null, error: new Error('timeout') }), 5000)
+          ),
+        ]);
 
-      if (!error && data) {
-        profile = data as Profile;
-        break;
+        if (!error && data) {
+          profile = data as Profile;
+          break;
+        }
+
+        if (import.meta.env.DEV) {
+          console.error('Profile fetch attempt', attempt + 1, 'failed:', error?.message);
+        }
+
+        if (attempt < 2) {
+          await new Promise(resolve => window.setTimeout(resolve, 250 * (attempt + 1)));
+        }
       }
-
-      if (error && import.meta.env.DEV) {
-        console.error('Profile fetch failed', error);
+    } finally {
+      // Always unblock the loading screen — even if every attempt timed out.
+      set({ profile, profileResolved: true });
+      if (profile) {
+        supabase.from('profiles').update({ last_seen_at: new Date().toISOString() }).eq('id', user.id);
       }
-
-      if (attempt < 2) {
-        await new Promise(resolve => window.setTimeout(resolve, 250 * (attempt + 1)));
-      }
-    }
-
-    set({ profile, profileResolved: true });
-    if (profile) {
-      // Fire-and-forget last_seen bump.
-      supabase.from('profiles').update({ last_seen_at: new Date().toISOString() }).eq('id', user.id);
     }
   },
 

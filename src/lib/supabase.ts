@@ -31,9 +31,14 @@ export const COLLEGE_NAME =
   (import.meta.env.VITE_COLLEGE_NAME as string | undefined) ??
   'IITM BS Programme';
 
+function normalizeAllowedDomain(domain: string): string {
+  const trimmed = domain.trim().toLowerCase();
+  return trimmed.startsWith('@') ? trimmed : `@${trimmed}`;
+}
+
 export function emailIsAllowed(email: string | null | undefined): boolean {
   if (!email) return false;
-  return email.toLowerCase().endsWith(ALLOWED_DOMAIN.toLowerCase());
+  return email.toLowerCase().endsWith(normalizeAllowedDomain(ALLOWED_DOMAIN));
 }
 
 export async function logEvent(

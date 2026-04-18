@@ -55,9 +55,15 @@ export default function Assignments() {
   );
 
   // Exam assignments — non-weekly categories
+  // Filter OPPE out if none of the user's enrolled subjects actually have an OPPE component
+  const userHasOppe = useMemo(() => subjects.some(s => s.grading_config?.hasOppe), [subjects]);
   const examAssignments = useMemo(() =>
-    allAssignments.filter(a => EXAM_CATEGORIES.includes(a.category)),
-    [allAssignments]
+    allAssignments.filter(a => {
+      if (!EXAM_CATEGORIES.includes(a.category)) return false;
+      if (a.category === 'oppe' && !userHasOppe) return false;
+      return true;
+    }),
+    [allAssignments, userHasOppe]
   );
 
   // Count for progress bar (only weekly)
@@ -143,6 +149,7 @@ export default function Assignments() {
       {tab === 'exams' && (
         <ExamList
           assignments={examAssignments}
+          allOppeAssignments={allAssignments.filter(a => a.category === 'oppe')}
           completionMap={completionMap}
           level={profile?.level}
           toggle={toggle}
@@ -338,28 +345,61 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 const CATEGORY_ORDER = ['quiz', 'oppe', 'endterm', 'roe', 'bpt', 'ka', 'project', 'bonus', 'extra'];
 
-function ExamList({ assignments, completionMap, level, toggle }: {
+function ExamList({ assignments, allOppeAssignments, completionMap, level, toggle }: {
   assignments: Assignment[];
+  allOppeAssignments: Assignment[];
   completionMap: Map<string, AssignmentCompletion>;
   level: string | null | undefined;
   toggle: ReturnType<typeof useToggleCompletion>;
 }) {
+  // OPPE bases that have a Day 3 or beyond — these are multi-day sessions (OPPE 2) and must NOT be merged
+  const oppeMultiDayBases = useMemo(() => {
+    const s = new Set<string>();
+    for (const a of allOppeAssignments) {
+      if (/Day\s+[3-9]/i.test(a.title)) {
+        const m = a.title.match(/^(.+?)\s+Day\s+\d+$/i);
+        if (m) s.add(m[1]);
+      }
+    }
+    return s;
+  }, [allOppeAssignments]);
+
   const grouped = useMemo(() => {
     const map = new Map<string, Assignment[]>();
     for (const a of assignments) {
       if (!map.has(a.category)) map.set(a.category, []);
       map.get(a.category)!.push(a);
     }
-    // Sort each group by date
-    for (const [, items] of map) {
+    // Sort each group by date, then merge 2-day OPPE sessions (e.g. OPPE 1 Day 1 + Day 2)
+    for (const [cat, items] of map) {
       items.sort((a, b) => {
         const da = a.exam_date ?? deadlineFor(a, level) ?? '';
         const db = b.exam_date ?? deadlineFor(b, level) ?? '';
         return da.localeCompare(db);
       });
+      if (cat === 'oppe') {
+        // Merge Day 1 + Day 2 into "Day 1/2" ONLY for groups with exactly 2 days (like OPPE 1).
+        // Groups with Day 3+ (like OPPE 2) stay separate.
+        const merged: Assignment[] = [];
+        const seen = new Set<string>();
+        for (const a of items) {
+          const m = a.title.match(/^(.+?)\s+Day\s+([12])$/i);
+          if (m && !oppeMultiDayBases.has(m[1])) {
+            const base = m[1];
+            if (!seen.has(base)) {
+              seen.add(base);
+              merged.push({ ...a, title: `${base} — Day 1/2` });
+            }
+            // skip the Day 2 duplicate
+          } else {
+            merged.push(a);
+          }
+        }
+        map.set(cat, merged);
+      }
     }
     return map;
-  }, [assignments, level]);
+  }, [assignments, level, oppeMultiDayBases]);
 
   const orderedCategories = CATEGORY_ORDER.filter(c => grouped.has(c));
 

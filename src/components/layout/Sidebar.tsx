@@ -58,7 +58,7 @@ export function Sidebar() {
         )}
       </nav>
 
-      {/* Profile area — clicking navigates to /profile */}
+      {/* Profile area — always anchored to bottom of sidebar */}
       <div className="mt-auto p-3 border-t border-border">
         <NavLink
           to="/profile"

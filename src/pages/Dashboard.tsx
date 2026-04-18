@@ -53,9 +53,12 @@ function DashWeekGroup({ weekNum, items, subjects, level, toggle }: {
 
   return (
     <div className="rounded-lg border border-border overflow-hidden">
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-2 px-3 py-2.5 bg-surface2/40 hover:bg-surface2/70 transition-colors"
+        onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setOpen(o => !o)}
+        className="w-full flex items-center gap-2 px-3 py-2.5 bg-surface2/40 hover:bg-surface2/70 transition-colors cursor-pointer"
       >
         <ChevronDown className={`h-3.5 w-3.5 text-fgmuted transition-transform duration-200 shrink-0 ${open ? 'rotate-180' : ''}`} />
         <span className="text-[13px] font-semibold">Week {weekNum}</span>
@@ -74,7 +77,7 @@ function DashWeekGroup({ weekNum, items, subjects, level, toggle }: {
             </Badge>
           )}
         </div>
-      </button>
+      </div>
 
       <AnimatePresence initial={false}>
         {open && (
@@ -183,19 +186,26 @@ export default function Dashboard() {
       .filter(a => a.days !== null && a.days >= 0 && a.days <= 14)
       .sort((a, b) => (a.days ?? 999) - (b.days ?? 999));
 
-    // Merge OPPE "Day 1" and "Day 2" entries (same exam, different shifts)
+    // Merge OPPE "Day 1" and "Day 2" ONLY for 2-day exam sessions (e.g. OPPE 1).
+    // Sessions with Day 3+ (e.g. OPPE 2 which spans 4 days) must stay as separate entries.
+    const oppeMultiDayBases = new Set(
+      assignments
+        .filter(a => a.category === 'oppe' && /Day\s+[3-9]/i.test(a.title))
+        .map(a => { const m = a.title.match(/^(.+?)\s+Day\s+\d+$/i); return m ? m[1] : ''; })
+        .filter(Boolean)
+    );
     const result: typeof raw = [];
     const seenOppeBases = new Set<string>();
     for (const a of raw) {
       if (a.category === 'oppe') {
         const match = a.title.match(/^(.+?)\s+Day\s+[12]$/i);
-        if (match) {
+        if (match && !oppeMultiDayBases.has(match[1])) {
           const base = match[1];
           if (!seenOppeBases.has(base)) {
             seenOppeBases.add(base);
-            result.push({ ...a, title: `${base} Day 1/2` });
+            result.push({ ...a, title: `${base} — Day 1/2` });
           }
-          continue; // skip the duplicate Day 2 entry
+          continue; // skip the Day 2 duplicate
         }
       }
       result.push(a);

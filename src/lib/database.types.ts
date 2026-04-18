@@ -1,4 +1,5 @@
 export type CourseLevel = 'foundation' | 'diploma';
+export type NotificationKind = 'announcement' | 'reminder' | 'alert';
 export type UserRole = 'student' | 'admin';
 export type AssignmentCategory =
   | 'weekly' | 'quiz' | 'endterm' | 'oppe' | 'project' | 'bonus' | 'roe' | 'bpt' | 'ka' | 'extra';
@@ -144,6 +145,16 @@ export interface AppLogWithUser extends AppLog {
 
 export interface TicketWithProfile extends Ticket {
   profile?: Pick<Profile, 'full_name' | 'email'> | null;
+}
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  body: string | null;
+  kind: NotificationKind;
+  target_level: CourseLevel | null;
+  created_by: string | null;
+  created_at: string;
 }
 
 export interface Ticket {

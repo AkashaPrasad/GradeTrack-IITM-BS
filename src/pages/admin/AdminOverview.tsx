@@ -8,7 +8,7 @@ import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip as RTooltip, 
 export default function AdminOverview() {
   useTitle('Admin — Overview');
 
-  const { data: stats, isLoading } = useQuery({
+  const { data: stats, isLoading, isError, refetch } = useQuery({
     queryKey: ['admin-stats'],
     queryFn: async () => {
       const [students, logs, tickets, completions] = await Promise.all([
@@ -25,10 +25,18 @@ export default function AdminOverview() {
       };
     },
     refetchInterval: 30_000,
+    retry: 2,
   });
 
-  if (isLoading || !stats) return (
+  if (isLoading) return (
     <div className="p-5 space-y-4"><Skeleton className="h-6 w-40" /><div className="grid gap-4 md:grid-cols-4">{[...Array(4)].map((_, i) => <SkeletonCard key={i} />)}</div></div>
+  );
+
+  if (isError || !stats) return (
+    <div className="p-5 flex flex-col items-start gap-3">
+      <p className="text-sm text-fgmuted">Failed to load overview stats.</p>
+      <button onClick={() => refetch()} className="text-sm text-accent hover:underline">Retry</button>
+    </div>
   );
 
   const s = stats;

@@ -19,6 +19,20 @@ import { initialOf } from '@/lib/utils';
 const stagger = { hidden: {}, visible: { transition: { staggerChildren: 0.04 } } };
 const fadeUp = { hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } };
 
+function decodeVapidPublicKey(key: string): ArrayBuffer {
+  const normalized = key.trim().replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+  const raw = window.atob(padded);
+  const buffer = new ArrayBuffer(raw.length);
+  const bytes = new Uint8Array(buffer);
+
+  for (let i = 0; i < raw.length; i += 1) {
+    bytes[i] = raw.charCodeAt(i);
+  }
+
+  return buffer;
+}
+
 export default function Profile() {
   useTitle('Profile');
   const { profile, updateProfile, signOut } = useAuth();
@@ -38,39 +52,60 @@ export default function Profile() {
 
   const hasNotifications = !!profile?.push_subscription;
 
-  const toggleNotifications = async () => {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      toast.error('Push notifications are not supported in this browser.');
-      return;
-    }
+  const toggleNotifications = async (nextChecked: boolean) => {
     setNotifLoading(true);
     try {
-      const reg = await navigator.serviceWorker.ready;
-      if (hasNotifications) {
-        const existing = await reg.pushManager.getSubscription();
-        if (existing) await existing.unsubscribe();
+      if (!nextChecked) {
+        if ('serviceWorker' in navigator && 'PushManager' in window) {
+          const reg = await navigator.serviceWorker.getRegistration();
+          const existing = await reg?.pushManager.getSubscription();
+          if (existing) {
+            await existing.unsubscribe();
+          }
+        }
         await updateProfile({ push_subscription: null });
-        toast.success('Notifications disabled.');
+        toast.success('Push notifications disabled.');
       } else {
-        const permission = await Notification.requestPermission();
-        if (permission !== 'granted') {
-          toast.error('Notification permission denied. Enable it in your browser settings.');
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+          toast.error('Push notifications are not supported in this browser.');
           return;
         }
+
         const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
         if (!vapidKey) {
-          toast.error('VAPID public key not configured. Add VITE_VAPID_PUBLIC_KEY to your .env file.');
+          toast.error('Push notifications are not configured yet. Contact the admin.');
           return;
         }
-        const sub = await reg.pushManager.subscribe({
+
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+          toast.error('Notification permission denied. Enable it in your browser settings and try again.');
+          return;
+        }
+
+        const reg = await Promise.race([
+          navigator.serviceWorker.ready,
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () => reject(new Error('Service worker is taking too long. Try refreshing the page.')),
+              10_000,
+            )
+          ),
+        ]);
+
+        // Reuse an existing subscription if one already exists (avoids duplicate
+        // subscriptions after e.g. clearing app data or re-installing the PWA)
+        const existing = await reg.pushManager.getSubscription();
+        const sub = existing ?? await reg.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: vapidKey,
+          applicationServerKey: decodeVapidPublicKey(vapidKey),
         });
+
         await updateProfile({ push_subscription: sub.toJSON() as any });
-        toast.success('Notifications enabled! You will be notified before deadlines.');
+        toast.success('Push notifications enabled! You\'ll be reminded before deadlines.');
       }
     } catch (e: any) {
-      toast.error(e?.message ?? 'Failed to update notifications');
+      toast.error(e?.message ?? 'Failed to update notifications. Please try again.');
     } finally {
       setNotifLoading(false);
     }
@@ -198,4 +233,3 @@ export default function Profile() {
     </motion.div>
   );
 }
-

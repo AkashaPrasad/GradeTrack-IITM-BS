@@ -10,24 +10,76 @@ export default function AuthCallback() {
   const { refreshProfile } = useAuth();
 
   useEffect(() => {
-    (async () => {
-      const { data, error } = await supabase.auth.getSession();
-      if (error || !data.session) {
-        nav('/', { replace: true });
+    let active = true;
+
+    const finishSignIn = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const providerError = params.get('error_description') ?? params.get('error');
+
+      if (providerError) {
+        await logEvent('auth.callback_failed', { providerError }, 'error');
+        if (active) nav('/', { replace: true });
         return;
       }
-      const email = data.session.user.email;
+
+      const { data, error } = await supabase.auth.getSession();
+      let session = data.session;
+
+      if (!session && !error) {
+        const code = params.get('code');
+        if (code) {
+          const { data: exchanged, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          if (exchangeError) {
+            await logEvent('auth.callback_failed', { message: exchangeError.message }, 'error');
+            if (active) nav('/', { replace: true });
+            return;
+          }
+          session = exchanged.session;
+        }
+      }
+
+      if (error || !session) {
+        await logEvent('auth.callback_missing_session', { message: error?.message ?? null }, 'warn');
+        if (active) nav('/', { replace: true });
+        return;
+      }
+
+      const email = session.user.email;
       if (!emailIsAllowed(email)) {
         await logEvent('auth.domain_blocked', { email }, 'warn');
         await supabase.auth.signOut();
         useAuth.setState({ domainBlocked: true });
-        nav('/', { replace: true });
+        if (active) nav('/', { replace: true });
         return;
       }
+
+      useAuth.setState({
+        session,
+        user: session.user,
+        domainBlocked: false,
+        profileResolved: false,
+      });
+
       await logEvent('auth.login', { email });
-      await refreshProfile();
-      nav('/dashboard', { replace: true });
-    })();
+
+      // Race against an 8-second timeout so the page never hangs forever
+      // if the profile fetch stalls. profileResolved is guaranteed by try/finally
+      // in refreshProfile, so navigation is always safe after this.
+      await Promise.race([
+        refreshProfile(),
+        new Promise<void>(resolve => setTimeout(resolve, 8000)),
+      ]);
+
+      if (active) {
+        nav('/dashboard', { replace: true });
+      }
+    };
+
+    void finishSignIn();
+
+    return () => {
+      active = false;
+    };
   }, [nav, refreshProfile]);
 
   return (

@@ -1,11 +1,37 @@
+import { useEffect, useRef, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/stores/auth';
+
+// If the loading screen is still showing after this many ms, force it away.
+// Something has gone wrong internally — better to redirect the user than
+// leave them on a spinner forever.
+const LOADING_TIMEOUT_MS = 10_000;
+
+function useLoadingTimeout(isLoading: boolean): boolean {
+  const [timedOut, setTimedOut] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (isLoading) {
+      timer.current = setTimeout(() => setTimedOut(true), LOADING_TIMEOUT_MS);
+    } else {
+      if (timer.current) clearTimeout(timer.current);
+      setTimedOut(false);
+    }
+    return () => { if (timer.current) clearTimeout(timer.current); };
+  }, [isLoading]);
+
+  return timedOut;
+}
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { session, initializing, profile, profileResolved } = useAuth();
   const loc = useLocation();
 
-  if (initializing || (session && !profileResolved)) {
+  const isLoading = initializing || (!!session && !profileResolved);
+  const timedOut = useLoadingTimeout(isLoading);
+
+  if (isLoading && !timedOut) {
     return (
       <div className="min-h-screen grid place-items-center">
         <div className="flex items-center gap-2 text-fgmuted text-sm">
@@ -20,7 +46,6 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     return <Navigate to="/" replace state={{ from: loc.pathname }} />;
   }
 
-  // New user? send to onboarding (level + courses), except while already there.
   if (profile && !profile.onboarded && loc.pathname !== '/onboarding') {
     return <Navigate to="/onboarding" replace />;
   }
@@ -30,7 +55,11 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
 export function AdminGuard({ children }: { children: React.ReactNode }) {
   const { profile, initializing, session, profileResolved } = useAuth();
-  if (initializing || (session && !profileResolved)) {
+
+  const isLoading = initializing || (!!session && !profileResolved);
+  const timedOut = useLoadingTimeout(isLoading);
+
+  if (isLoading && !timedOut) {
     return (
       <div className="min-h-screen grid place-items-center">
         <div className="flex items-center gap-2 text-fgmuted text-sm">

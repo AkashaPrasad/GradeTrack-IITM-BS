@@ -41,6 +41,23 @@ export function percentage(a: number, b: number): number {
   return Math.round((a / b) * 100);
 }
 
+export function relativeTime(d: string | Date | null | undefined): string {
+  if (!d) return '';
+  const then = typeof d === 'string' ? new Date(d).getTime() : d.getTime();
+  if (Number.isNaN(then)) return '';
+  const diffMs = Date.now() - then;
+  const sec = Math.floor(diffMs / 1000);
+  const min = Math.floor(sec / 60);
+  const hr = Math.floor(min / 60);
+  const day = Math.floor(hr / 24);
+  if (sec < 60) return 'just now';
+  if (min < 60) return `${min}m ago`;
+  if (hr < 24) return `${hr}h ago`;
+  if (day === 1) return 'yesterday';
+  if (day < 7) return `${day}d ago`;
+  return formatDate(d);
+}
+
 export function initialOf(name?: string | null): string {
   if (!name) return '·';
   return name.trim().charAt(0).toUpperCase();
