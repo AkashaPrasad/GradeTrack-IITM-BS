@@ -15,6 +15,28 @@ export function getGradeLetter(score: number): GradeLetter {
   return 'U';
 }
 
+export function getGradePoint(letter: GradeLetter | 'I' | 'W' | string): number {
+  switch (letter) {
+    case 'S':
+      return 10;
+    case 'A':
+      return 9;
+    case 'B':
+      return 8;
+    case 'C':
+      return 7;
+    case 'D':
+      return 6;
+    case 'E':
+      return 4;
+    case 'I':
+    case 'W':
+    case 'U':
+    default:
+      return 0;
+  }
+}
+
 export function getGradeColor(score: number): string {
   for (const g of GRADE_THRESHOLDS) if (score >= g.min) return g.color;
   return GRADE_THRESHOLDS[GRADE_THRESHOLDS.length - 1].color;

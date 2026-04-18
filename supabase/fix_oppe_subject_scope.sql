@@ -1,12 +1,6 @@
 -- Fix legacy subject-less OPPE rows and restore the subject-scoped OPPE rows
 -- used by the Jan 2026 seeded term.
 
-do $$ begin
-  alter table public.assignments
-    add constraint assignments_oppe_requires_subject
-    check (category <> 'oppe' or subject_id is not null);
-exception when duplicate_object then null; end $$;
-
 delete from public.assignments
 where term_id = '00000000-0000-0000-0000-00000000e001'
   and category = 'oppe';
@@ -45,3 +39,9 @@ do update set
   exam_date = excluded.exam_date,
   comments = excluded.comments,
   is_published = excluded.is_published;
+
+do $$ begin
+  alter table public.assignments
+    add constraint assignments_oppe_requires_subject
+    check (category <> 'oppe' or subject_id is not null);
+exception when duplicate_object then null; end $$;

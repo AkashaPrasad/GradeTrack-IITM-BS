@@ -34,6 +34,7 @@ supabase/.temp/
 supabase/.env
 supabase/schema.sql
 supabase/seed.sql
+supabase/
 
 # ─── Logs ─────────────────────────────────────────────────────────────────────
 logs/

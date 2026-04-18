@@ -12,7 +12,7 @@ import { Skeleton, SkeletonCard } from '@/components/ui/Skeleton';
 import { Empty } from '@/components/ui/Empty';
 import { useMySubjects, useMyGrades, useSaveGrade } from '@/hooks/useData';
 import { calculateScore, checkEligibility, minFinalForTargets, bestWeeklyAverage } from '@/lib/grading/calculator';
-import { getGradeColor, GRADE_THRESHOLDS } from '@/lib/grading/letters';
+import { getGradeColor, getGradePoint, GRADE_THRESHOLDS } from '@/lib/grading/letters';
 import type { Grade, Subject, GradingConfig } from '@/lib/database.types';
 import { toast } from 'sonner';
 import { ChevronDown, ChevronUp, CheckCircle2, XCircle } from 'lucide-react';
@@ -20,11 +20,96 @@ import { ChevronDown, ChevronUp, CheckCircle2, XCircle } from 'lucide-react';
 const stagger = { hidden: {}, visible: { transition: { staggerChildren: 0.04 } } };
 const fadeUp = { hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } };
 
+function createEmptyGrade(subjectId: string): Grade {
+  return {
+    id: '',
+    user_id: '',
+    subject_id: subjectId,
+    qz1_score: null,
+    qz2_score: null,
+    final_exam_score: null,
+    oppe1_score: null,
+    oppe2_score: null,
+    roe_score: null,
+    p1_score: null,
+    p2_score: null,
+    ka_score: null,
+    nppe1_score: null,
+    nppe2_score: null,
+    bpta_score: null,
+    bonus_score: null,
+    quiz1_attended: false,
+    quiz2_attended: false,
+    sct_completed: false,
+    weekly_scores: [],
+    extras: {},
+    notes: null,
+    created_at: '',
+    updated_at: ''
+  };
+}
+
+function hasAnyRecordedMarks(grade: Grade): boolean {
+  const scalarValues = [
+    grade.qz1_score,
+    grade.qz2_score,
+    grade.final_exam_score,
+    grade.oppe1_score,
+    grade.oppe2_score,
+    grade.roe_score,
+    grade.p1_score,
+    grade.p2_score,
+    grade.ka_score,
+    grade.nppe1_score,
+    grade.nppe2_score,
+    grade.bpta_score,
+    grade.bonus_score
+  ];
+
+  if (scalarValues.some(value => typeof value === 'number')) return true;
+  if ((grade.weekly_scores ?? []).some(value => typeof value === 'number')) return true;
+  if (grade.quiz1_attended || grade.quiz2_attended || grade.sct_completed) return true;
+
+  return Object.values(grade.extras ?? {}).some(value => {
+    if (typeof value === 'number') return true;
+    if (Array.isArray(value)) return value.some(item => typeof item === 'number');
+    return false;
+  });
+}
+
+function calculateTermGpa(subjects: Subject[], grades: Map<string, Grade>): number | null {
+  if (subjects.length === 0) return null;
+
+  let weightedPoints = 0;
+  let totalCredits = 0;
+  let hasAnyMarks = false;
+
+  for (const subject of subjects) {
+    const grade = grades.get(subject.id) ?? createEmptyGrade(subject.id);
+    const result = calculateScore(subject, grade);
+
+    weightedPoints += getGradePoint(result.letter) * subject.credits;
+    totalCredits += subject.credits;
+    hasAnyMarks ||= hasAnyRecordedMarks(grade);
+  }
+
+  if (!hasAnyMarks || totalCredits === 0) return null;
+  return weightedPoints / totalCredits;
+}
+
 export default function Grades() {
   useTitle('Grades');
   const subjects = useMySubjects();
   const { data: grades = [], isLoading } = useMyGrades();
+  const [previewGrades, setPreviewGrades] = useState<Record<string, Partial<Grade>>>({});
   const gradeMap = new Map(grades.map(g => [g.subject_id, g]));
+  const effectiveGradeMap = new Map(
+    subjects.map(subject => {
+      const saved = gradeMap.get(subject.id) ?? createEmptyGrade(subject.id);
+      return [subject.id, { ...saved, ...(previewGrades[subject.id] ?? {}) } as Grade];
+    })
+  );
+  const termGpa = calculateTermGpa(subjects, effectiveGradeMap);
 
   if (isLoading) return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-4">
@@ -41,36 +126,52 @@ export default function Grades() {
   return (
     <motion.div initial="hidden" animate="visible" variants={stagger} className="p-4 md:p-6 max-w-4xl mx-auto space-y-4">
       <motion.div variants={fadeUp}>
-        <h1 className="text-lg font-bold tracking-tightest">Grades</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-bold tracking-tightest">Grades</h1>
+          <Badge variant="muted" className="text-[11px] font-semibold">
+            GPA {termGpa === null ? '—' : termGpa.toFixed(2)}
+          </Badge>
+        </div>
         <p className="text-sm text-fgmuted">Open a course, enter your marks, and press Save.</p>
       </motion.div>
       {subjects.map(s => (
         <motion.div key={s.id} variants={fadeUp}>
-          <SubjectGradeCard subject={s} grade={gradeMap.get(s.id) ?? null} />
+          <SubjectGradeCard
+            subject={s}
+            grade={gradeMap.get(s.id) ?? null}
+            onPreviewGradeChange={preview => {
+              setPreviewGrades(prev => {
+                if (Object.keys(preview).length === 0) {
+                  if (!(s.id in prev)) return prev;
+                  const next = { ...prev };
+                  delete next[s.id];
+                  return next;
+                }
+                return { ...prev, [s.id]: preview };
+              });
+            }}
+          />
         </motion.div>
       ))}
     </motion.div>
   );
 }
 
-function SubjectGradeCard({ subject: s, grade: g }: { subject: Subject; grade: Grade | null }) {
+function SubjectGradeCard({
+  subject: s,
+  grade: g,
+  onPreviewGradeChange
+}: {
+  subject: Subject;
+  grade: Grade | null;
+  onPreviewGradeChange?: (preview: Partial<Grade>) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState<Partial<Grade>>({});
   const save = useSaveGrade();
   const cfg = s.grading_config;
   const vars = cfg.variables ?? [];
-
-  const emptyGrade: Grade = {
-    id: '', user_id: '', subject_id: s.id,
-    qz1_score: null, qz2_score: null, final_exam_score: null,
-    oppe1_score: null, oppe2_score: null, roe_score: null,
-    p1_score: null, p2_score: null, ka_score: null,
-    nppe1_score: null, nppe2_score: null, bpta_score: null,
-    bonus_score: null, quiz1_attended: false, quiz2_attended: false,
-    sct_completed: false, weekly_scores: [], extras: {},
-    notes: null, created_at: '', updated_at: ''
-  };
-  const grade = g ?? emptyGrade;
+  const grade = g ?? createEmptyGrade(s.id);
   // Merge saved + pending for live grade calculation preview
   const effective = { ...grade, ...pending } as Grade;
   const result = calculateScore(s, effective);
@@ -78,8 +179,16 @@ function SubjectGradeCard({ subject: s, grade: g }: { subject: Subject; grade: G
   const targets = minFinalForTargets(s, effective, [40, 50, 60, 70, 80, 90]);
   const hasPending = Object.keys(pending).length > 0;
 
+  const updatePending = (next: Partial<Grade> | ((prev: Partial<Grade>) => Partial<Grade>)) => {
+    setPending(prev => {
+      const resolved = typeof next === 'function' ? next(prev) : next;
+      onPreviewGradeChange?.(resolved);
+      return resolved;
+    });
+  };
+
   const handleOpen = () => {
-    if (open) setPending({});  // discard unsaved changes on close
+    if (open) updatePending({});  // discard unsaved changes on close
     setOpen(p => !p);
   };
 
@@ -88,20 +197,20 @@ function SubjectGradeCard({ subject: s, grade: g }: { subject: Subject; grade: G
     save.mutate({ subject_id: s.id, ...pending }, {
       onSuccess: () => {
         toast.success('Marks saved!', { duration: 1500, id: `save-${s.id}` });
-        setPending({});
+        updatePending({});
       }
     });
   };
 
   const setField = (field: keyof Grade, value: any) => {
-    setPending(prev => ({ ...prev, [field]: value }));
+    updatePending(prev => ({ ...prev, [field]: value }));
   };
 
   const setWeekly = (index: number, value: number | null) => {
     const ws = [...(effective.weekly_scores ?? [])];
     while (ws.length <= index) ws.push(null);
     ws[index] = value;
-    setPending(prev => ({ ...prev, weekly_scores: ws }));
+    updatePending(prev => ({ ...prev, weekly_scores: ws }));
   };
 
   const numInput = (field: keyof Grade, label: string, max = 100) => (
@@ -251,7 +360,7 @@ function SubjectGradeCard({ subject: s, grade: g }: { subject: Subject; grade: G
                     onChange={e => {
                       const arr = [...((effective.extras as any)?.BDM_GA ?? [0, 0, 0, 0])];
                       arr[i] = e.target.value === '' ? 0 : Number(e.target.value);
-                      setPending(prev => ({ ...prev, extras: { ...effective.extras, BDM_GA: arr } }));
+                      updatePending(prev => ({ ...prev, extras: { ...effective.extras, BDM_GA: arr } }));
                     }}
                   />
                 ))}
@@ -290,7 +399,7 @@ function SubjectGradeCard({ subject: s, grade: g }: { subject: Subject; grade: G
                 <Input type="number" min={0} max={100} step="0.5" className="mt-1"
                   placeholder="—"
                   defaultValue={(effective.extras as any)?.GAA2 ?? ''}
-                  onChange={e => setPending(prev => ({ ...prev, extras: { ...effective.extras, GAA2: e.target.value === '' ? 0 : Number(e.target.value) } }))}
+                  onChange={e => updatePending(prev => ({ ...prev, extras: { ...effective.extras, GAA2: e.target.value === '' ? 0 : Number(e.target.value) } }))}
                 />
               </div>
               <div>
@@ -298,7 +407,7 @@ function SubjectGradeCard({ subject: s, grade: g }: { subject: Subject; grade: G
                 <Input type="number" min={0} max={100} step="0.5" className="mt-1"
                   placeholder="—"
                   defaultValue={(effective.extras as any)?.GAA3 ?? ''}
-                  onChange={e => setPending(prev => ({ ...prev, extras: { ...effective.extras, GAA3: e.target.value === '' ? 0 : Number(e.target.value) } }))}
+                  onChange={e => updatePending(prev => ({ ...prev, extras: { ...effective.extras, GAA3: e.target.value === '' ? 0 : Number(e.target.value) } }))}
                 />
               </div>
             </div>
@@ -350,8 +459,8 @@ function SubjectGradeCard({ subject: s, grade: g }: { subject: Subject; grade: G
                 <div className="text-[11px] text-fgmuted mb-1">You need in the final exam:</div>
                 <div className="flex flex-wrap gap-2">
                   {targets.filter(t => t.minScore >= 40).map(t => (
-                    <div key={t.letter} className="text-[12px]">
-                      <Badge variant="muted">{t.letter}</Badge>
+                    <div key={`${t.minScore}-${t.letter}`} className="text-[12px]">
+                      <Badge variant="muted">{t.minScore === 40 ? 'E(Pass)' : t.letter}</Badge>
                       <span className="ml-1">{t.achievable ? `${t.minFinalExamNeeded}/100` : 'N/A'}</span>
                     </div>
                   ))}
