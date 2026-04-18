@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Bell, Megaphone, AlertCircle, Check } from 'lucide-react';
+import { Bell, Megaphone, AlertCircle, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { useNotifications, useMarkNotificationsRead, useRealtimeNotifications } from '@/hooks/useData';
 import { cn, relativeTime } from '@/lib/utils';
 import type { NotificationKind } from '@/lib/database.types';
@@ -25,6 +25,7 @@ const panelVariants = {
 
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const ref = useRef<HTMLDivElement>(null);
 
   const { data } = useNotifications();
@@ -53,10 +54,20 @@ export function NotificationBell() {
   const handleOpen = () => {
     const next = !open;
     setOpen(next);
+    if (!next) setExpandedIds(new Set());
     // Mark all unread as read as soon as the panel opens
     if (next && unread.length > 0) {
       markRead.mutate(unread.map(n => n.id));
     }
+  };
+
+  const toggleExpanded = (id: string) => {
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   return (
@@ -143,12 +154,22 @@ export function NotificationBell() {
                   const meta     = KIND_META[n.kind] ?? KIND_META.announcement;
                   const Icon     = meta.icon;
                   const isLast   = i === notifications.length - 1;
+                  const isExpanded = expandedIds.has(n.id);
 
                   return (
                     <div
                       key={n.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => toggleExpanded(n.id)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          toggleExpanded(n.id);
+                        }
+                      }}
                       className={cn(
-                        'relative flex items-start gap-3 px-4 py-3 transition-colors',
+                        'relative flex items-start gap-3 px-4 py-3 transition-colors cursor-pointer',
                         !isLast && 'border-b border-border/60',
                         isUnread ? 'bg-accent/[0.04] dark:bg-accent/[0.06]' : 'hover:bg-surface2/60'
                       )}
@@ -165,16 +186,26 @@ export function NotificationBell() {
 
                       {/* Content */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-baseline justify-between gap-2">
-                          <span className={cn('text-[13px] leading-snug', isUnread ? 'font-semibold text-fg' : 'font-medium text-fg/80')}>
+                        <div className="flex items-start justify-between gap-2">
+                          <span className={cn('text-[13px] leading-snug pr-2', isUnread ? 'font-semibold text-fg' : 'font-medium text-fg/80')}>
                             {n.title}
                           </span>
-                          <span className="text-[10px] text-fgsubtle whitespace-nowrap shrink-0">
-                            {relativeTime(n.created_at)}
-                          </span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="text-[10px] text-fgsubtle whitespace-nowrap">
+                              {relativeTime(n.created_at)}
+                            </span>
+                            {n.body && (
+                              isExpanded
+                                ? <ChevronUp className="h-3.5 w-3.5 text-fgsubtle" />
+                                : <ChevronDown className="h-3.5 w-3.5 text-fgsubtle" />
+                            )}
+                          </div>
                         </div>
                         {n.body && (
-                          <p className="text-[12px] text-fgmuted mt-0.5 leading-relaxed line-clamp-2">
+                          <p className={cn(
+                            'text-[12px] text-fgmuted mt-0.5 leading-relaxed break-words',
+                            isExpanded ? 'whitespace-pre-wrap' : 'line-clamp-2'
+                          )}>
                             {n.body}
                           </p>
                         )}

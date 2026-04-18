@@ -26,11 +26,22 @@ const STATUS_VARIANT: Record<TicketStatus, 'danger' | 'warning' | 'success' | 'm
 };
 
 const EDITABLE_STATUSES = new Set<TicketStatus>(['open', 'in_progress']);
+const DAILY_TICKET_LIMIT = 2;
+const TICKET_LIMIT_MESSAGE = 'Your ticket limit for today is done. Try again tomorrow.';
 
 function startOfTodayIso() {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  return now.toISOString();
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+
+  const year = Number(parts.find(part => part.type === 'year')?.value);
+  const month = Number(parts.find(part => part.type === 'month')?.value);
+  const day = Number(parts.find(part => part.type === 'day')?.value);
+
+  return new Date(Date.UTC(year, month - 1, day, 0, 0, 0) - (5 * 60 + 30) * 60 * 1000).toISOString();
 }
 
 export default function Support() {
@@ -59,11 +70,10 @@ export default function Support() {
 
   const editingTicket = tickets.find(ticket => ticket.id === editingId) ?? null;
   const ticketsToday = useMemo(() => {
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
+    const start = new Date(startOfTodayIso());
     return tickets.filter(ticket => new Date(ticket.created_at) >= start).length;
   }, [tickets]);
-  const remainingToday = Math.max(0, 3 - ticketsToday);
+  const remainingToday = Math.max(0, DAILY_TICKET_LIMIT - ticketsToday);
   const isEditing = !!editingTicket;
   const createDisabled = !isEditing && remainingToday === 0;
 
@@ -105,8 +115,8 @@ export default function Support() {
         .eq('user_id', profile.id)
         .gte('created_at', startOfTodayIso());
       if (countError) throw countError;
-      if ((count ?? 0) >= 3) {
-        throw new Error('You can submit only 3 tickets per day.');
+      if ((count ?? 0) >= DAILY_TICKET_LIMIT) {
+        throw new Error(TICKET_LIMIT_MESSAGE);
       }
 
       const { error } = await supabase.from('tickets').insert({
@@ -126,7 +136,7 @@ export default function Support() {
     },
     onError: (e: unknown) => {
       const msg = e instanceof Error ? e.message : null;
-      const safe = msg === 'Title is required' || msg === 'Not signed in' || msg === 'You can submit only 3 tickets per day.';
+      const safe = msg === 'Title is required' || msg === 'Not signed in' || msg === TICKET_LIMIT_MESSAGE || msg === 'You can submit only 2 tickets per day.';
       toast.error(safe ? msg : isEditing ? 'Failed to update ticket. Please try again.' : 'Failed to submit. Please try again.');
     }
   });
@@ -145,9 +155,15 @@ export default function Support() {
           </CardHeader>
           <CardBody className="space-y-3">
             <div className="rounded-md border border-border bg-surface2/50 px-3 py-2 text-[12px] text-fgmuted">
-              You can submit up to <span className="font-semibold text-fg">3 tickets per day</span>.
+              You can submit up to <span className="font-semibold text-fg">2 tickets per day</span>.
               {isEditing ? ' Editing a ticket does not count toward the limit.' : ` ${remainingToday} submission${remainingToday === 1 ? '' : 's'} left today.`}
             </div>
+
+            {createDisabled && !isEditing && (
+              <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-[12px] text-warning">
+                {TICKET_LIMIT_MESSAGE}
+              </div>
+            )}
 
             <div className="flex gap-2">
               {(['bug', 'suggestion', 'question'] as const).map(k => {
