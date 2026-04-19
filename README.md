@@ -1,4 +1,4 @@
-# GradeTrack — IITM BS Programme Grade Tracker
+# GradeTrack —- IITM BS Programme Grade Tracker
 
 A full-stack Progressive Web App for students of the **IIT Madras BS Programme** to track grades, assignments, and academic progress across Foundation and Diploma levels.
 
