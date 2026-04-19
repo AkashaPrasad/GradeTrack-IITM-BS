@@ -18,6 +18,9 @@ export default function AuthCallback() {
 
       if (providerError) {
         await logEvent('auth.callback_failed', { providerError }, 'error');
+        if (providerError.toLowerCase().includes('database error saving new user')) {
+          useAuth.setState({ domainBlocked: true });
+        }
         if (active) nav('/', { replace: true });
         return;
       }
