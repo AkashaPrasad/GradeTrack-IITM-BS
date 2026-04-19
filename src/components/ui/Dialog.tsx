@@ -35,11 +35,12 @@ export function DialogContent({
             animate={mobile ? { y: 0 } : { opacity: 1, scale: 1 }}
             exit={mobile ? { y: '100%' } : { opacity: 0, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+            style={mobile ? undefined : { x: '-50%', y: '-50%' }}
             className={cn(
               'fixed z-50 bg-surface hairline shadow-lg',
               mobile
                 ? 'inset-x-0 bottom-0 rounded-t-xl p-5 pb-[env(safe-area-inset-bottom,0)]'
-                : 'left-1/2 top-1/2 w-[min(520px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-lg p-6',
+                : 'left-1/2 top-1/2 w-[min(520px,calc(100vw-32px))] rounded-lg p-6',
               className
             )}
           >

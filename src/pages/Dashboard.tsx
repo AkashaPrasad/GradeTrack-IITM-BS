@@ -170,7 +170,7 @@ export default function Dashboard() {
       const dl = deadlineFor(a, profile?.level);
       if (!dl) continue;
       const days = daysUntil(dl);
-      if (days === null || days < 0 || days > 14) continue; // skip overdue & far future
+      if (days === null || days < 0 || days > 21) continue; // skip overdue & far future
       const completion = completionMap.get(a.id);
       if (completion?.is_completed || completion?.skipped) continue; // skip done/skipped
       const w = a.week_number ?? 0;
@@ -331,7 +331,7 @@ export default function Dashboard() {
       <motion.div variants={fadeUp}>
         <h2 className="text-sm font-semibold tracking-tighter mb-2">Upcoming assignments</h2>
         {upcomingWeeks.length === 0 ? (
-          <p className="text-sm text-fgmuted">No upcoming assignments in the next 2 weeks.</p>
+          <p className="text-sm text-fgmuted">No upcoming assignments in the next 3 weeks.</p>
         ) : (
           <div className="space-y-2">
             {upcomingWeeks.map(([weekNum, items]) => (
