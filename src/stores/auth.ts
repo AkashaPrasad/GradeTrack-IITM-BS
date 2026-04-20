@@ -13,6 +13,10 @@ interface AuthState {
   _authSub: { unsubscribe: () => void } | null;
   init: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<string | null>;
+  signUpWithEmail: (email: string, password: string) => Promise<string | null>;
+  verifyEmailOtp: (email: string, token: string) => Promise<string | null>;
+  resendEmailOtp: (email: string) => Promise<string | null>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   updateProfile: (patch: Partial<Profile>) => Promise<void>;
@@ -109,6 +113,50 @@ export const useAuth = create<AuthState>((set, get) => ({
         queryParams: { prompt: 'select_account' }
       }
     });
+  },
+
+  signInWithEmail: async (email, password) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (!error) return null;
+    const msg = error.message.toLowerCase();
+    if (msg.includes('invalid login credentials') || msg.includes('invalid credentials')) {
+      return 'Incorrect email or password. Please try again.';
+    }
+    if (msg.includes('email not confirmed')) {
+      return 'EMAIL_NOT_CONFIRMED';
+    }
+    return error.message;
+  },
+
+  signUpWithEmail: async (email, password) => {
+    if (!emailIsAllowed(email)) {
+      return 'Only @ds.study.iitm.ac.in email addresses can create an account.';
+    }
+    const { error } = await supabase.auth.signUp({ email, password });
+    if (!error) {
+      await logEvent('auth.signup_email', { email });
+      return null;
+    }
+    const msg = error.message.toLowerCase();
+    if (msg.includes('already registered') || msg.includes('already exists') || msg.includes('user already')) {
+      return 'An account with this email already exists. Try signing in instead.';
+    }
+    return error.message;
+  },
+
+  verifyEmailOtp: async (email, token) => {
+    const { error } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
+    if (!error) {
+      await logEvent('auth.otp_verified', { email });
+      return null;
+    }
+    return 'Invalid or expired code. Please check and try again.';
+  },
+
+  resendEmailOtp: async (email) => {
+    const { error } = await supabase.auth.resend({ type: 'signup', email });
+    if (!error) return null;
+    return error.message;
   },
 
   signOut: async () => {

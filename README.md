@@ -4,6 +4,30 @@ A full-stack Progressive Web App for students of the **IIT Madras BS Programme**
 
 ---
 
+## Demo / Test Account
+
+A pre-configured account is available for previewing the app without a real student email:
+
+| Field    | Value                         |
+|----------|-------------------------------|
+| Email    | `demo@ds.study.iitm.ac.in`   |
+| Password | `Demo@IITM2026`               |
+
+Sign in via the **Email & Password** tab on the landing page. The account is pre-enrolled in foundation subjects and lands directly on the dashboard (onboarding already completed).
+
+---
+
+## Authentication
+
+Two sign-in methods are supported:
+
+- **Google OAuth** — One-click sign-in with your `@ds.study.iitm.ac.in` Google account.
+- **Email & Password** — Create an account with your `@ds.study.iitm.ac.in` email; a 6-digit OTP is sent to verify ownership before the account is activated.
+
+Only `@ds.study.iitm.ac.in` addresses are accepted, enforced in both the frontend and a Postgres trigger on `auth.users`.
+
+---
+
 ## Features
 
 - **Grade Dashboard** — Live GPA, letter grades, and per-subject score breakdown
