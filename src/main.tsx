@@ -19,12 +19,20 @@ if (dsn) {
   });
 }
 
-registerSW({
-  immediate: true,
-  onRegisterError(error) {
-    console.error('[PWA] Service worker registration failed', error);
-  },
-});
+if (import.meta.env.DEV) {
+  // Unregister any stale SW from previous dev sessions so it doesn't intercept
+  // HMR/fetch requests and throw "clone: body already used" errors.
+  navigator.serviceWorker?.getRegistrations().then(regs => {
+    regs.forEach(r => r.unregister());
+  });
+} else {
+  registerSW({
+    immediate: true,
+    onRegisterError(error) {
+      console.error('[PWA] Service worker registration failed', error);
+    },
+  });
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -22,6 +22,79 @@ export interface Profile {
   last_seen_at: string | null;
   created_at: string;
   updated_at: string;
+  // Scaler features
+  is_scaler_verified: boolean | null;
+  scaler_email: string | null;
+  scaler_verified_at: string | null;
+  whatsapp_number: string | null;
+  hostel: 'Uniworld 1' | 'Uniworld 2' | null;
+  scaler_id: string | null;
+}
+
+export type ExamType = 'quiz1' | 'quiz2' | 'endterm';
+
+export interface ExamSchedule {
+  id: string;
+  exam_type: ExamType;
+  exam_date: string;
+  academic_year: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HallTicket {
+  id: string;
+  user_id: string;
+  exam_type: ExamType;
+  student_name: string;
+  scaler_id: string;
+  centre_name: string;
+  exam_date: string;
+  exam_timing: string;
+  whatsapp_number: string | null;
+  hostel: 'Uniworld 1' | 'Uniworld 2' | null;
+  pdf_storage_path: string | null;
+  uploaded_at: string;
+  expires_at: string;
+  is_active: boolean;
+}
+
+export interface HallTicketWithProfile extends HallTicket {
+  profile?: Pick<Profile, 'full_name' | 'avatar_url'> | null;
+}
+
+export interface BusFormConfig {
+  id: string;
+  exam_type: ExamType;
+  is_open: boolean;
+  open_at: string | null;
+  close_at: string | null;
+  eligible_centres: string[];
+  max_seats: number;
+  current_seats_taken: number;
+  bus_departure_time: string | null;
+  bus_pickup_location: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface BusRegistration {
+  id: string;
+  user_id: string;
+  exam_type: ExamType;
+  student_name: string;
+  scaler_id: string;
+  centre_name: string;
+  whatsapp_number: string | null;
+  hostel: string | null;
+  seat_confirmed: boolean;
+  confirmed_by: string | null;
+  confirmed_at: string | null;
+  submitted_at: string;
+}
+
+export interface BusRegistrationWithProfile extends BusRegistration {
+  profile?: Pick<Profile, 'full_name' | 'email' | 'avatar_url'> | null;
 }
 
 export interface Term {

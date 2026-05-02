@@ -1,16 +1,21 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, GraduationCap, CheckSquare, LineChart, MessageCircleQuestion } from 'lucide-react';
+import { LayoutDashboard, GraduationCap, CheckSquare, LineChart, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/stores/auth';
 
-const tabs = [
+const baseTabs = [
   { to: '/dashboard', label: 'Home', icon: LayoutDashboard },
   { to: '/grades', label: 'Grades', icon: GraduationCap },
   { to: '/assignments', label: 'Tasks', icon: CheckSquare },
   { to: '/progress', label: 'Progress', icon: LineChart },
-  { to: '/support', label: 'Support', icon: MessageCircleQuestion },
 ];
 
 export function MobileTabs() {
+  const { profile } = useAuth();
+  const tabs = profile?.is_scaler_verified
+    ? [...baseTabs, { to: '/exam-travel', label: 'Travel', icon: MapPin }]
+    : baseTabs;
+
   return (
     <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 glass border-t border-border pb-[env(safe-area-inset-bottom,0)]">
       <div className="flex justify-around h-14">

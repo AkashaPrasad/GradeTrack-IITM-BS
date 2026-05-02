@@ -1,7 +1,8 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, GraduationCap, CheckSquare, LineChart, MessageCircleQuestion, Shield, LogOut } from 'lucide-react';
+import { LayoutDashboard, GraduationCap, CheckSquare, LineChart, MessageCircleQuestion, Shield, LogOut, MapPin } from 'lucide-react';
 import { useAuth } from '@/stores/auth';
 import { cn, initialOf } from '@/lib/utils';
+import { ScalerBadge } from '@/components/ui/ScalerBadge';
 
 const items = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -42,6 +43,21 @@ export function Sidebar() {
             {label}
           </NavLink>
         ))}
+        {profile?.is_scaler_verified && (
+          <NavLink
+            to="/exam-travel"
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-2.5 h-8 px-2.5 rounded-md text-[13px] font-medium transition-colors',
+                isActive ? 'bg-surface2 text-fg' : 'text-fgmuted hover:text-fg hover:bg-surface2/60'
+              )
+            }
+          >
+            <MapPin className="h-[15px] w-[15px]" />
+            <span className="flex-1">Exam Travel</span>
+            <ScalerBadge size="sm" />
+          </NavLink>
+        )}
         {profile?.role === 'admin' && (
           <NavLink
             to="/admin"

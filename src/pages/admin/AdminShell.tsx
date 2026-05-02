@@ -1,5 +1,5 @@
 import { NavLink, Link, Outlet } from 'react-router-dom';
-import { BarChart2, BookOpen, Calendar, Users, FileText, Ticket, FlaskConical, Bell, LayoutDashboard, ArrowLeft } from 'lucide-react';
+import { BarChart2, BookOpen, Calendar, Users, FileText, Ticket, FlaskConical, Bell, LayoutDashboard, ArrowLeft, MapPin, Bus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
@@ -12,6 +12,9 @@ const nav = [
   { to: '/admin/tickets', label: 'Tickets', icon: Ticket },
   { to: '/admin/formulas', label: 'Formulas', icon: FlaskConical },
   { to: '/admin/push', label: 'Push', icon: Bell },
+  { to: '/admin/exam-schedule', label: 'Exam Sched.', icon: Calendar },
+  { to: '/admin/centres', label: 'Centres', icon: MapPin },
+  { to: '/admin/bus', label: 'Bus', icon: Bus },
 ];
 
 export default function AdminShell() {

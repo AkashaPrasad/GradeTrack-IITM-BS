@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Switch } from '@/components/ui/Switch';
 import { ThemeToggle } from '@/components/layout/ThemeToggle';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/Select';
+import { ScalerVerification } from '@/components/features/scaler/ScalerVerification';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { LogOut, Bell, BellOff } from 'lucide-react';
@@ -215,6 +216,9 @@ export default function Profile() {
           </CardBody>
         </Card>
       </motion.div>
+
+      {/* Scaler verification */}
+      <ScalerVerification />
 
       {/* Theme */}
       <motion.div variants={fadeUp}>

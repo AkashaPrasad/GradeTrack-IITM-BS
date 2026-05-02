@@ -24,6 +24,11 @@ import AdminLogs from '@/pages/admin/AdminLogs';
 import AdminTickets from '@/pages/admin/AdminTickets';
 import AdminFormulas from '@/pages/admin/AdminFormulas';
 import AdminPush from '@/pages/admin/AdminPush';
+import ExamTravel from '@/pages/ExamTravel';
+import AdminExamSchedule from '@/pages/admin/AdminExamSchedule';
+import AdminCentres from '@/pages/admin/AdminCentres';
+import AdminBus from '@/pages/admin/AdminBus';
+import { ScalerGuard } from '@/components/ui/ScalerGuard';
 
 function IndexRedirect() {
   const session = useAuth(s => s.session);
@@ -83,6 +88,14 @@ export default function App() {
           <Route path="/progress" element={<Progress />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/support" element={<Support />} />
+          <Route
+            path="/exam-travel"
+            element={
+              <ScalerGuard>
+                <ExamTravel />
+              </ScalerGuard>
+            }
+          />
         </Route>
 
         <Route
@@ -103,6 +116,9 @@ export default function App() {
           <Route path="tickets" element={<AdminTickets />} />
           <Route path="formulas" element={<AdminFormulas />} />
           <Route path="push" element={<AdminPush />} />
+          <Route path="exam-schedule" element={<AdminExamSchedule />} />
+          <Route path="centres" element={<AdminCentres />} />
+          <Route path="bus" element={<AdminBus />} />
         </Route>
 
         <Route path="*" element={<NotFound />} />
