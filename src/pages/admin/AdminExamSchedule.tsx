@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Calendar } from 'lucide-react';
+import { Calendar, ToggleLeft, ToggleRight } from 'lucide-react';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input, Label } from '@/components/ui/Input';
+import { Badge } from '@/components/ui/Badge';
 import { useTitle } from '@/lib/hooks';
 import { useAdminExamSchedule, useUpsertExamSchedule } from '@/hooks/useAdminBusConfig';
 import type { ExamType } from '@/lib/database.types';
@@ -14,34 +15,74 @@ const EXAMS: { type: ExamType; label: string }[] = [
   { type: 'endterm', label: 'End Term' },
 ];
 
-function ExamRow({ examType, label, currentDate }: { examType: ExamType; label: string; currentDate?: string }) {
-  const [date, setDate] = useState(currentDate ?? '');
+function ExamRow({
+  examType, label, currentDate, currentCentreRegOpen,
+}: {
+  examType: ExamType; label: string; currentDate?: string; currentCentreRegOpen?: boolean | null;
+}) {
+  const [date, setDate]         = useState(currentDate ?? '');
+  const [regOpen, setRegOpen]   = useState<boolean | null>(currentCentreRegOpen ?? null);
   const upsert = useUpsertExamSchedule();
 
+  const cycleRegOpen = () => {
+    // cycle: null (auto) → true (force open) → false (force closed) → null
+    setRegOpen((v) => v === null ? true : v === true ? false : null);
+  };
+
+  const regLabel = regOpen === true ? 'Force Open' : regOpen === false ? 'Force Closed' : 'Auto (7 days before)';
+  const regVariant = regOpen === true ? 'success' : regOpen === false ? 'danger' : 'muted';
+
   return (
-    <div className="flex items-end gap-3 py-4 border-b border-border last:border-0">
-      <div className="flex-1 min-w-0">
+    <div className="space-y-3 py-4 border-b border-border last:border-0">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="font-medium text-[14px]">{label}</div>
         {currentDate && (
-          <div className="text-[12px] text-fgmuted mt-0.5">
-            Currently: {formatDate(currentDate)}
-          </div>
+          <div className="text-[12px] text-fgmuted">Exam: {formatDate(currentDate)}</div>
         )}
       </div>
-      <div className="flex items-end gap-2">
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* Exam date */}
         <div>
-          <Label htmlFor={`date-${examType}`}>Date</Label>
+          <Label htmlFor={`date-${examType}`}>Exam Date</Label>
           <Input
             id={`date-${examType}`}
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="mt-1 w-40"
+            className="mt-1"
           />
         </div>
+
+        {/* Centre registration toggle */}
+        <div>
+          <Label>Centre Registration</Label>
+          <div className="mt-1 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={cycleRegOpen}
+              className="flex items-center gap-2 h-9 px-3 rounded-md border border-border text-[13px] hover:bg-surface2 transition-colors"
+            >
+              {regOpen === true ? (
+                <ToggleRight className="h-4 w-4 text-success" />
+              ) : regOpen === false ? (
+                <ToggleLeft className="h-4 w-4 text-danger" />
+              ) : (
+                <Calendar className="h-4 w-4 text-fgmuted" />
+              )}
+              <Badge variant={regVariant} className="text-[11px]">{regLabel}</Badge>
+            </button>
+          </div>
+          <p className="text-[11px] text-fgsubtle mt-1">
+            Auto = opens automatically 7 days before exam
+          </p>
+        </div>
+      </div>
+
+      <div className="flex justify-end">
         <Button
           size="sm"
-          onClick={() => upsert.mutate({ exam_type: examType, exam_date: date })}
+          onClick={() => upsert.mutate({ exam_type: examType, exam_date: date, centre_reg_open: regOpen })}
           loading={upsert.isPending}
           disabled={!date}
         >
@@ -55,9 +96,6 @@ function ExamRow({ examType, label, currentDate }: { examType: ExamType; label: 
 export default function AdminExamSchedule() {
   useTitle('Exam Schedule — Admin');
   const { data: schedule = [], isLoading } = useAdminExamSchedule();
-  const dateMap = Object.fromEntries(
-    schedule.map((s: { exam_type: string; exam_date: string }) => [s.exam_type, s.exam_date])
-  );
 
   return (
     <div className="p-4 md:p-6 max-w-2xl mx-auto space-y-5">
@@ -80,14 +118,18 @@ export default function AdminExamSchedule() {
               ))}
             </div>
           ) : (
-            EXAMS.map(({ type, label }) => (
-              <ExamRow
-                key={type}
-                examType={type}
-                label={label}
-                currentDate={dateMap[type] as string | undefined}
-              />
-            ))
+            EXAMS.map(({ type, label }) => {
+              const entry = schedule.find((s: any) => s.exam_type === type);
+              return (
+                <ExamRow
+                  key={type}
+                  examType={type}
+                  label={label}
+                  currentDate={entry?.exam_date}
+                  currentCentreRegOpen={entry?.centre_reg_open ?? null}
+                />
+              );
+            })
           )}
         </CardBody>
       </Card>

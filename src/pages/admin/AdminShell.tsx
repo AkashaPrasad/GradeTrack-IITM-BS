@@ -5,7 +5,6 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 const nav = [
   { to: '/admin', label: 'Overview', icon: LayoutDashboard, end: true },
-  { to: '/admin/terms', label: 'Terms', icon: Calendar },
   { to: '/admin/assignments', label: 'Assignments', icon: BookOpen },
   { to: '/admin/students', label: 'Students', icon: Users },
   { to: '/admin/logs', label: 'Logs', icon: FileText },

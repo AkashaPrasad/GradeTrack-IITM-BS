@@ -17,7 +17,6 @@ import NotFound from '@/pages/NotFound';
 import Support from '@/pages/Support';
 import AdminShell from '@/pages/admin/AdminShell';
 import AdminOverview from '@/pages/admin/AdminOverview';
-import AdminTerms from '@/pages/admin/AdminTerms';
 import AdminAssignments from '@/pages/admin/AdminAssignments';
 import AdminStudents from '@/pages/admin/AdminStudents';
 import AdminLogs from '@/pages/admin/AdminLogs';
@@ -109,7 +108,6 @@ export default function App() {
           }
         >
           <Route index element={<AdminOverview />} />
-          <Route path="terms" element={<AdminTerms />} />
           <Route path="assignments" element={<AdminAssignments />} />
           <Route path="students" element={<AdminStudents />} />
           <Route path="logs" element={<AdminLogs />} />

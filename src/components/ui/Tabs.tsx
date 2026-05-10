@@ -17,7 +17,7 @@ export function TabsTrigger({ className, ...props }: T.TabsTriggerProps) {
   return (
     <T.Trigger
       className={cn(
-        'relative px-3 h-8 rounded-sm text-[13px] font-medium text-fgmuted transition-colors',
+        'relative inline-flex items-center justify-center gap-1.5 px-3 h-8 rounded-sm text-[13px] font-medium text-fgmuted transition-colors',
         'hover:text-fg',
         'data-[state=active]:bg-surface data-[state=active]:text-fg data-[state=active]:shadow-xs',
         className

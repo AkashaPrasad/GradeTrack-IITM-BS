@@ -386,6 +386,7 @@ export function minFinalForTargets(
     else if (target >= 80) letter = 'A';
     else if (target >= 70) letter = 'B';
     else if (target >= 60) letter = 'C';
+    else if (target >= 50) letter = 'D';
     else letter = 'E';
     results.push({
       letter,

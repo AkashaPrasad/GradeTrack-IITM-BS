@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle, Clock, Bus } from 'lucide-react';
+import { CheckCircle, Clock, Bus, MapPin, Timer } from 'lucide-react';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/Dialog';
-import { useCancelBusRegistration } from '@/hooks/useBusRegistration';
+import { useCancelBusRegistration, useBusFormConfig } from '@/hooks/useBusRegistration';
 import type { BusRegistration, ExamType } from '@/lib/database.types';
 import { formatDate } from '@/lib/utils';
 
@@ -17,6 +17,7 @@ interface BusStatusCardProps {
 export function BusStatusCard({ registration, examType }: BusStatusCardProps) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const cancel = useCancelBusRegistration();
+  const { data: config } = useBusFormConfig(examType);
 
   return (
     <>
@@ -56,10 +57,28 @@ export function BusStatusCard({ registration, examType }: BusStatusCardProps) {
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              className="flex items-center gap-2 text-[13px] text-success bg-success/10 rounded-md px-3 py-2"
+              className="space-y-2"
             >
-              <CheckCircle className="h-4 w-4 shrink-0" />
-              Your bus seat is confirmed! See you on exam day.
+              <div className="flex items-center gap-2 text-[13px] text-success bg-success/10 rounded-md px-3 py-2">
+                <CheckCircle className="h-4 w-4 shrink-0" />
+                Your bus seat is confirmed! See you on exam day.
+              </div>
+              {(config?.bus_departure_time || config?.bus_pickup_location) && (
+                <div className="text-[12px] bg-surface2 rounded-md px-3 py-2 space-y-1">
+                  {config.bus_pickup_location && (
+                    <div className="flex items-start gap-1.5">
+                      <MapPin className="h-3.5 w-3.5 mt-0.5 text-accent shrink-0" />
+                      <span><span className="text-fgsubtle">Pickup: </span>{config.bus_pickup_location}</span>
+                    </div>
+                  )}
+                  {config.bus_departure_time && (
+                    <div className="flex items-start gap-1.5">
+                      <Timer className="h-3.5 w-3.5 mt-0.5 text-accent shrink-0" />
+                      <span><span className="text-fgsubtle">Departure: </span>{config.bus_departure_time}</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </motion.div>
           ) : (
             <p className="text-[12px] text-fgmuted">

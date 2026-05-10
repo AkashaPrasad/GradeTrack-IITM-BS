@@ -53,8 +53,8 @@ export function Sidebar() {
               )
             }
           >
-            <MapPin className="h-[15px] w-[15px]" />
-            <span className="flex-1">Exam Travel</span>
+            <MapPin className="h-[15px] w-[15px] shrink-0" />
+            <span className="flex-1 truncate">Exam Travel</span>
             <ScalerBadge size="sm" />
           </NavLink>
         )}

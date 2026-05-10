@@ -21,6 +21,14 @@ out/
 .env.production.local
 .env.staging
 *.local
+# Generic secret / credential files
+secrets.json
+credentials.json
+service-account*.json
+*.pem
+*.key
+*.p12
+*.pfx
 
 # ─── TypeScript Build Cache ───────────────────────────────────────────────────
 *.tsbuildinfo
@@ -34,7 +42,12 @@ supabase/.temp/
 supabase/.env
 supabase/schema.sql
 supabase/seed.sql
-supabase/
+# Edge function secrets
+supabase/functions/**/.env
+supabase/functions/**/secrets.json
+# Supabase service role / management keys (never commit)
+supabase/config.toml.local
+
 
 # ─── Logs ─────────────────────────────────────────────────────────────────────
 logs/
@@ -99,3 +112,5 @@ temp/
 
 # ─── Local Backups / DB Dumps ────────────────────────────────────────────────
 backups/
+Webpage.html
+Webpage_files/

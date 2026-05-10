@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { CalendarDays, List, CheckCircle2, X, CalendarClock, BookOpen, ChevronDown } from 'lucide-react';
 import { useTitle } from '@/lib/hooks';
 import { useAuth } from '@/stores/auth';
-import { useActiveTerm, useAssignments, useMyCompletions, useMySubjects, useToggleCompletion, useRealtimeAssignments } from '@/hooks/useData';
+import { useStudentCurrentTerm, useAutoMigrateStudentTerms, useAssignments, useMyCompletions, useMyEnrolledSubjectsForStudentTerm, useToggleCompletion, useRealtimeAssignments } from '@/hooks/useData';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Progress } from '@/components/ui/Progress';
@@ -30,12 +30,13 @@ const EXAM_CATEGORIES = ['quiz', 'endterm', 'oppe', 'roe', 'bpt', 'ka', 'project
 export default function Assignments() {
   useTitle('Assignments');
   const { profile } = useAuth();
-  const { data: term, isLoading: tl } = useActiveTerm();
-  const { data: allAssignments = [], isLoading: al } = useAssignments(term?.id);
+  const { termId, level, studentTerm, isLoading: tl } = useStudentCurrentTerm();
+  useAutoMigrateStudentTerms();
+  const { data: allAssignments = [], isLoading: al } = useAssignments(termId ?? undefined, level);
   const { data: completions = [] } = useMyCompletions();
-  const subjects = useMySubjects();
+  const subjects = useMyEnrolledSubjectsForStudentTerm(studentTerm);
   const toggle = useToggleCompletion();
-  useRealtimeAssignments(term?.id);
+  useRealtimeAssignments(termId ?? undefined);
 
   const [tab, setTab] = useState<MainTab>('assignments');
   const [view, setView] = useState<View>('list');
@@ -131,12 +132,12 @@ export default function Assignments() {
               assignments={weeklyAssignments}
               completionMap={completionMap}
               subjects={subjects}
-              level={profile?.level}
+              level={level}
               toggle={toggle}
             />
           )}
           {view === 'calendar' && (
-            <CalendarView assignments={weeklyAssignments} completionMap={completionMap} level={profile?.level} />
+            <CalendarView assignments={weeklyAssignments} completionMap={completionMap} level={level} />
           )}
         </>
       )}
@@ -147,7 +148,7 @@ export default function Assignments() {
           assignments={examAssignments}
           allOppeAssignments={examAssignments.filter(a => a.category === 'oppe')}
           completionMap={completionMap}
-          level={profile?.level}
+          level={level}
           subjects={subjects}
           toggle={toggle}
         />

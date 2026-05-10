@@ -80,11 +80,21 @@ export function toUserMessage(err: unknown, fallback = 'Something went wrong. Pl
   if (err instanceof Error) {
     msg = err.message;
   } else if (typeof err === 'object' && err !== null && 'message' in err) {
-    msg = String((err as { message: unknown }).message);
+    // Supabase PostgrestError can have message = "" for some constraint/policy errors
+    const raw = (err as { message: unknown }).message;
+    msg = raw != null ? String(raw) : '';
+    // Also surface details when message is blank but details has content
+    if (!msg.trim() && typeof err === 'object' && 'details' in err) {
+      const details = (err as { details: unknown }).details;
+      if (details != null) msg = String(details);
+    }
   } else {
     msg = String(err);
   }
   const lower = msg.toLowerCase();
-  const looksInternal = INTERNAL_ERROR_PATTERNS.some(p => lower.includes(p.toLowerCase())) || msg.length > 300;
+  const looksInternal =
+    !msg.trim() ||
+    INTERNAL_ERROR_PATTERNS.some((p) => lower.includes(p.toLowerCase())) ||
+    msg.length > 300;
   return looksInternal ? fallback : msg;
 }

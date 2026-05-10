@@ -1,234 +1,322 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Upload, FileText, AlertCircle } from 'lucide-react';
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/Dialog';
+import { AlertCircle, CheckCircle2, MapPin, Search, PenLine } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/Dialog';
 import { Button } from '@/components/ui/Button';
-import { Input, Label } from '@/components/ui/Input';
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/Select';
+import { Input, Label, Textarea } from '@/components/ui/Input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
 import { useUploadHallTicket } from '@/hooks/useHallTicket';
+import { useExamCentres } from '@/hooks/useExamCentres';
 import { useAuth } from '@/stores/auth';
-import { extractHallTicketData } from '@/lib/hallTicketParser';
-import type { ExamType } from '@/lib/database.types';
+import type { ExamCentre, ExamType } from '@/lib/database.types';
 
 const schema = z.object({
-  studentName: z.string().min(2, 'Required'),
-  scalerId: z.string().min(2, 'Required'),
-  centreName: z.string().min(2, 'Required'),
-  examDate: z.string().min(1, 'Required'),
-  examTiming: z.string().min(1, 'Required'),
-  whatsappNumber: z.string().min(10, 'Enter a valid number'),
-  hostel: z.enum(['Uniworld 1', 'Uniworld 2'], { required_error: 'Select your hostel' }),
-  examType: z.enum(['quiz1', 'quiz2', 'endterm']),
+  studentName:    z.string().min(2, 'Name is required'),
+  scalerId:       z.string().min(2, 'Roll number is required'),
+  whatsappNumber: z.string().min(10, 'Enter a valid WhatsApp number'),
+  hostel:         z.enum(['Uniworld 1', 'Uniworld 2'], { required_error: 'Select your hostel' }),
+  centreMode:     z.enum(['list', 'custom']),
+  centreName:     z.string().min(2, 'Centre name is required'),
+  centreAddress:  z.string().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
 
+const EXAM_LABELS: Record<ExamType, string> = {
+  quiz1:   'Quiz 1',
+  quiz2:   'Quiz 2',
+  endterm: 'End Term',
+};
+
 interface HallTicketUploadProps {
-  open: boolean;
-  onClose: () => void;
-  examType: ExamType;
+  open:           boolean;
+  onClose:        () => void;
+  examType:       ExamType;
   defaultExamDate?: string;
 }
 
-export function HallTicketUpload({ open, onClose, examType, defaultExamDate }: HallTicketUploadProps) {
-  const { profile } = useAuth();
-  const upload = useUploadHallTicket();
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
-  const [extracting, setExtracting] = useState(false);
-  const [extractError, setExtractError] = useState<string | null>(null);
+function CentreOption({
+  centre,
+  selected,
+  onSelect,
+}: {
+  centre: ExamCentre;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`w-full text-left px-3 py-2.5 rounded-lg border transition-colors ${
+        selected
+          ? 'border-accent bg-accent/10 text-fg'
+          : 'border-border bg-surface hover:border-accent/40 hover:bg-surface2'
+      }`}
+    >
+      <div className="flex items-start gap-2">
+        <MapPin className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${selected ? 'text-accent' : 'text-fgmuted'}`} />
+        <div className="min-w-0">
+          <div className="text-[13px] font-medium truncate">{centre.name}</div>
+          <div className="text-[11px] text-fgmuted truncate">{centre.city} · {centre.address}</div>
+        </div>
+        {selected && <CheckCircle2 className="h-4 w-4 text-accent ml-auto shrink-0" />}
+      </div>
+    </button>
+  );
+}
 
-  const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<FormValues>({
+export function HallTicketUpload({ open, onClose, examType, defaultExamDate }: HallTicketUploadProps) {
+  const { profile }              = useAuth();
+  const upload                   = useUploadHallTicket();
+  const { data: centres = [] }   = useExamCentres();
+  const [centreSearch, setCentreSearch] = useState('');
+  const [selectedCentre, setSelectedCentre] = useState<ExamCentre | null>(null);
+
+  const defaults = useMemo(() => ({
+    studentName:    profile?.full_name ?? '',
+    scalerId:       profile?.scaler_id ?? '',
+    whatsappNumber: profile?.whatsapp_number ?? '',
+    hostel:         (profile?.hostel as 'Uniworld 1' | 'Uniworld 2' | undefined) ?? undefined,
+    centreMode:     'list' as const,
+    centreName:     '',
+    centreAddress:  '',
+  }), [profile]);
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    formState: { errors },
+  } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: {
-      examType,
-      examDate: defaultExamDate ?? '',
-      whatsappNumber: profile?.whatsapp_number ?? '',
-      hostel: (profile?.hostel as 'Uniworld 1' | 'Uniworld 2' | undefined) ?? undefined,
-    },
+    defaultValues: defaults,
   });
 
-  const handleFile = useCallback(async (file: File) => {
-    if (file.size > 10 * 1024 * 1024) {
-      setExtractError('File too large (max 10 MB)');
-      return;
-    }
-    setPdfFile(file);
-    setExtracting(true);
-    setExtractError(null);
-    try {
-      const parsed = await extractHallTicketData(file);
-      if (parsed.studentName) setValue('studentName', parsed.studentName);
-      if (parsed.scalerId) setValue('scalerId', parsed.scalerId);
-      if (parsed.centreName) setValue('centreName', parsed.centreName);
-      if (parsed.examDate) setValue('examDate', parsed.examDate);
-      if (parsed.examTiming) setValue('examTiming', parsed.examTiming);
-      if (parsed.examType) setValue('examType', parsed.examType);
-    } catch {
-      setExtractError("We couldn't extract details automatically. Please fill in the form manually.");
-    } finally {
-      setExtracting(false);
-    }
-  }, [setValue]);
+  const resetDialog = useCallback(() => {
+    reset(defaults);
+    setSelectedCentre(null);
+    setCentreSearch('');
+  }, [defaults, reset]);
+
+  useEffect(() => {
+    if (open) resetDialog();
+  }, [open, resetDialog]);
+
+  const centreMode    = watch('centreMode');
+  const hostelValue   = watch('hostel');
+  const centreNameVal = watch('centreName');
+
+  const filteredCentres = useMemo(() => {
+    const q = centreSearch.trim().toLowerCase();
+    if (!q) return centres;
+    return centres.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        c.city.toLowerCase().includes(q) ||
+        c.address.toLowerCase().includes(q),
+    );
+  }, [centres, centreSearch]);
+
+  const handleSelectCentre = (centre: ExamCentre) => {
+    setSelectedCentre(centre);
+    setValue('centreName', centre.name);
+    setValue('centreAddress', centre.address);
+  };
+
+  const handleSwitchToCustom = () => {
+    setValue('centreMode', 'custom');
+    setValue('centreName', '');
+    setValue('centreAddress', '');
+    setSelectedCentre(null);
+  };
+
+  const handleSwitchToList = () => {
+    setValue('centreMode', 'list');
+    setValue('centreName', '');
+    setValue('centreAddress', '');
+    setSelectedCentre(null);
+  };
 
   const onSubmit = async (data: FormValues) => {
     await upload.mutateAsync({
-      examType: data.examType,
-      studentName: data.studentName,
-      scalerId: data.scalerId,
-      centreName: data.centreName,
-      examDate: data.examDate,
-      examTiming: data.examTiming,
+      examType,
+      studentName:    data.studentName,
+      scalerId:       data.scalerId,
+      centreName:     data.centreName,
+      centreAddress:  data.centreAddress ?? '',
       whatsappNumber: data.whatsappNumber,
-      hostel: data.hostel,
-      pdfFile: pdfFile ?? undefined,
+      hostel:         data.hostel,
+      examDate:       defaultExamDate ?? null,
+      isSuggested:    data.centreMode === 'custom',
     });
-    reset();
-    setPdfFile(null);
     onClose();
   };
 
-  const hostelValue = watch('hostel');
-  const examTypeValue = watch('examType');
-
-  const EXAM_LABELS: Record<ExamType, string> = { quiz1: 'Quiz 1', quiz2: 'Quiz 2', endterm: 'End Term' };
-
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto">
-        <DialogTitle>Upload Hall Ticket</DialogTitle>
+      <DialogContent className="max-h-[90vh] overflow-y-auto max-w-lg">
+        <DialogTitle>Register Exam Centre — {EXAM_LABELS[examType]}</DialogTitle>
         <DialogDescription>
-          Upload your PDF and we'll extract details automatically. You can edit anything before saving.
+          Select your exam centre from the list or suggest your own if it&apos;s not listed.
         </DialogDescription>
 
-        {/* PDF Drop Zone */}
-        <div
-          className="mt-4 border-2 border-dashed border-border rounded-lg p-5 text-center cursor-pointer hover:border-accent/50 transition-colors"
-          onClick={() => fileRef.current?.click()}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={(e) => {
-            e.preventDefault();
-            const f = e.dataTransfer.files[0];
-            if (f?.type === 'application/pdf') void handleFile(f);
-          }}
-        >
-          <input
-            ref={fileRef}
-            type="file"
-            accept="application/pdf"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) void handleFile(f);
-            }}
-          />
-          {pdfFile ? (
-            <div className="flex items-center justify-center gap-2 text-sm">
-              <FileText className="h-5 w-5 text-accent" />
-              <span className="text-fg font-medium">{pdfFile.name}</span>
-            </div>
-          ) : (
-            <div className="space-y-1">
-              <Upload className="h-8 w-8 text-fgsubtle mx-auto" />
-              <p className="text-sm text-fgmuted">
-                {extracting ? 'Extracting details…' : 'Click or drag PDF here'}
-              </p>
-              <p className="text-[11px] text-fgsubtle">PDF only, max 10 MB</p>
-            </div>
-          )}
-        </div>
-
-        {extracting && (
-          <div className="flex items-center gap-2 text-sm text-fgmuted">
-            <span className="h-2 w-2 rounded-full bg-accent animate-pulse" />
-            Extracting details from your hall ticket…
-          </div>
-        )}
-
-        {extractError && (
-          <div className="flex items-start gap-2 text-[12px] text-warning bg-warning/10 rounded-md p-3">
-            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-            {extractError}
-          </div>
-        )}
-
-        {/* Form */}
-        <form onSubmit={handleSubmit(onSubmit)} className="mt-4 space-y-3">
-          <div>
-            <Label>Exam</Label>
-            <Select value={examTypeValue} onValueChange={(v) => setValue('examType', v as ExamType)}>
-              <SelectTrigger className="mt-1 w-full"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {(['quiz1', 'quiz2', 'endterm'] as ExamType[]).map(t => (
-                  <SelectItem key={t} value={t}>{EXAM_LABELS[t]}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <Label htmlFor="studentName">Student Name</Label>
-            <Input id="studentName" className="mt-1" {...register('studentName')} />
-            {errors.studentName && <p className="text-[11px] text-danger mt-1">{errors.studentName.message}</p>}
-          </div>
-
-          <div>
-            <Label htmlFor="scalerId">Scaler ID / Roll No</Label>
-            <Input id="scalerId" className="mt-1" {...register('scalerId')} />
-            {errors.scalerId && <p className="text-[11px] text-danger mt-1">{errors.scalerId.message}</p>}
-          </div>
-
-          <div>
-            <Label htmlFor="centreName">Exam Centre</Label>
-            <Input id="centreName" className="mt-1" {...register('centreName')} />
-            {errors.centreName && <p className="text-[11px] text-danger mt-1">{errors.centreName.message}</p>}
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
+        <form onSubmit={handleSubmit(onSubmit)} className="mt-4 space-y-4">
+          {/* Personal details */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <Label htmlFor="examDate">Exam Date</Label>
-              <Input id="examDate" type="date" className="mt-1" {...register('examDate')} />
-              {errors.examDate && <p className="text-[11px] text-danger mt-1">{errors.examDate.message}</p>}
+              <Label>Full Name</Label>
+              <Input className="mt-1" {...register('studentName')} />
+              {errors.studentName && (
+                <p className="mt-1 text-[11px] text-danger">{errors.studentName.message}</p>
+              )}
             </div>
             <div>
-              <Label htmlFor="examTiming">Timing / Slot</Label>
-              <Input id="examTiming" placeholder="e.g. 10:00 AM" className="mt-1" {...register('examTiming')} />
-              {errors.examTiming && <p className="text-[11px] text-danger mt-1">{errors.examTiming.message}</p>}
+              <Label>Roll Number</Label>
+              <Input className="mt-1" placeholder="DSxxBSxxxxxxx" {...register('scalerId')} />
+              {errors.scalerId && (
+                <p className="mt-1 text-[11px] text-danger">{errors.scalerId.message}</p>
+              )}
             </div>
           </div>
 
           <div>
-            <Label htmlFor="whatsappNumber">WhatsApp Number</Label>
-            <div className="flex mt-1">
-              <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-border bg-surface2 text-fgmuted text-sm">+91</span>
-              <Input
-                id="whatsappNumber"
-                placeholder="9876543210"
-                className="rounded-l-none"
-                {...register('whatsappNumber')}
-              />
+            <Label>WhatsApp Number</Label>
+            <div className="mt-1 flex">
+              <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-border bg-surface2 text-fgmuted text-sm">
+                +91
+              </span>
+              <Input className="rounded-l-none" placeholder="9876543210" {...register('whatsappNumber')} />
             </div>
-            {errors.whatsappNumber && <p className="text-[11px] text-danger mt-1">{errors.whatsappNumber.message}</p>}
+            {errors.whatsappNumber && (
+              <p className="mt-1 text-[11px] text-danger">{errors.whatsappNumber.message}</p>
+            )}
           </div>
 
           <div>
             <Label>Hostel</Label>
             <Select value={hostelValue ?? ''} onValueChange={(v) => setValue('hostel', v as 'Uniworld 1' | 'Uniworld 2')}>
-              <SelectTrigger className="mt-1 w-full"><SelectValue placeholder="Select hostel" /></SelectTrigger>
+              <SelectTrigger className="mt-1 w-full">
+                <SelectValue placeholder="Select hostel" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="Uniworld 1">Uniworld 1</SelectItem>
                 <SelectItem value="Uniworld 2">Uniworld 2</SelectItem>
               </SelectContent>
             </Select>
-            {errors.hostel && <p className="text-[11px] text-danger mt-1">{errors.hostel.message}</p>}
+            {errors.hostel && (
+              <p className="mt-1 text-[11px] text-danger">{errors.hostel.message}</p>
+            )}
           </div>
 
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
-            <Button type="submit" size="sm" loading={upload.isPending}>
-              Save Hall Ticket
+          {/* Centre selection */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Label>Exam Centre</Label>
+              {centreMode === 'list' ? (
+                <button
+                  type="button"
+                  onClick={handleSwitchToCustom}
+                  className="ml-auto text-[11px] text-accent hover:underline flex items-center gap-1"
+                >
+                  <PenLine className="h-3 w-3" />
+                  My centre is not in the list
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleSwitchToList}
+                  className="ml-auto text-[11px] text-accent hover:underline"
+                >
+                  Pick from list instead
+                </button>
+              )}
+            </div>
+
+            {centreMode === 'list' ? (
+              <div className="space-y-2">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-fgmuted pointer-events-none" />
+                  <Input
+                    value={centreSearch}
+                    onChange={(e) => setCentreSearch(e.target.value)}
+                    placeholder="Search centres..."
+                    className="pl-8"
+                  />
+                </div>
+                <div className="max-h-52 overflow-y-auto space-y-1.5 rounded-lg border border-border bg-surface p-1.5">
+                  {filteredCentres.length === 0 ? (
+                    <p className="py-6 text-center text-[12px] text-fgmuted">
+                      No centres found. Try a different search or suggest your centre below.
+                    </p>
+                  ) : (
+                    filteredCentres.map((c) => (
+                      <CentreOption
+                        key={c.id}
+                        centre={c}
+                        selected={selectedCentre?.id === c.id}
+                        onSelect={() => handleSelectCentre(c)}
+                      />
+                    ))
+                  )}
+                </div>
+                {errors.centreName && !selectedCentre && (
+                  <p className="text-[11px] text-danger">{errors.centreName.message}</p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3 rounded-lg border border-warning/30 bg-warning/5 p-3">
+                <div className="flex items-start gap-2 text-[12px] text-warning">
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>
+                    Your suggested centre will be visible to classmates right away. Admin will review
+                    and may add it to the official list.
+                  </span>
+                </div>
+                <div>
+                  <Label>Centre Name</Label>
+                  <Input
+                    className="mt-1"
+                    placeholder="Exact name from your hall ticket"
+                    value={centreNameVal}
+                    {...register('centreName')}
+                    onChange={(e) => setValue('centreName', e.target.value)}
+                  />
+                  {errors.centreName && (
+                    <p className="mt-1 text-[11px] text-danger">{errors.centreName.message}</p>
+                  )}
+                </div>
+                <div>
+                  <Label>Centre Address</Label>
+                  <Textarea
+                    className="mt-1"
+                    rows={3}
+                    placeholder="Copy the full address from your hall ticket"
+                    {...register('centreAddress')}
+                  />
+                  <p className="mt-1 text-[11px] text-fgsubtle">
+                    Paste the exact address so classmates can search the right location.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              loading={upload.isPending}
+              disabled={centreMode === 'list' && !selectedCentre}
+            >
+              Save Centre
             </Button>
           </div>
         </form>

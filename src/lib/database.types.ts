@@ -38,6 +38,7 @@ export interface ExamSchedule {
   exam_type: ExamType;
   exam_date: string;
   academic_year: string;
+  centre_reg_open: boolean | null;
   created_at: string;
   updated_at: string;
 }
@@ -49,14 +50,20 @@ export interface HallTicket {
   student_name: string;
   scaler_id: string;
   centre_name: string;
-  exam_date: string;
-  exam_timing: string;
+  centre_address: string | null;
+  exam_date: string | null;
+  reporting_time: string | null;
+  exam_timing: string | null;
+  shift: string | null;
   whatsapp_number: string | null;
   hostel: 'Uniworld 1' | 'Uniworld 2' | null;
   pdf_storage_path: string | null;
+  uploaded_via: 'pdf' | 'manual';
   uploaded_at: string;
   expires_at: string;
   is_active: boolean;
+  is_suggested: boolean;
+  suggested_status: 'pending' | 'approved' | 'rejected';
 }
 
 export interface HallTicketWithProfile extends HallTicket {
@@ -74,8 +81,21 @@ export interface BusFormConfig {
   current_seats_taken: number;
   bus_departure_time: string | null;
   bus_pickup_location: string | null;
+  close_on_capacity: boolean;
   updated_at: string;
   updated_by: string | null;
+}
+
+export interface ExamCentre {
+  id: string;
+  name: string;
+  address: string;
+  city: string;
+  pincode?: string | null;
+  maps_url?: string | null;
+  is_active: boolean;
+  display_order: number;
+  created_at: string;
 }
 
 export interface BusRegistration {
@@ -97,14 +117,30 @@ export interface BusRegistrationWithProfile extends BusRegistration {
   profile?: Pick<Profile, 'full_name' | 'email' | 'avatar_url'> | null;
 }
 
+export type TermType = 'jan' | 'may' | 'sep';
+
 export interface Term {
   id: string;
   name: string;
   start_date: string;
   end_date: string;
   is_active: boolean;
+  term_type: TermType | null;
   created_by: string | null;
   created_at: string;
+}
+
+export interface StudentTerm {
+  id: string;
+  user_id: string;
+  term_id: string | null;
+  term_type: TermType;
+  level: CourseLevel;
+  custom_name: string;
+  is_current: boolean;
+  subject_ids: string[];
+  created_at: string;
+  term?: Term;
 }
 
 export interface GradingConfig {

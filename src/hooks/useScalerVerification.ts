@@ -2,103 +2,104 @@ import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/stores/auth';
+import { toUserMessage } from '@/lib/utils';
 
 const SCALER_DOMAIN =
   (import.meta.env.VITE_SCALER_EMAIL_DOMAIN as string | undefined) ?? '@sst.scaler.com';
 
-function isScalerEmail(email: string): boolean {
-  return email.toLowerCase().endsWith(SCALER_DOMAIN.toLowerCase());
+export function isScalerEmail(email: string): boolean {
+  return email.trim().toLowerCase().endsWith(SCALER_DOMAIN.toLowerCase());
 }
 
 export function useScalerVerification() {
   const { profile, refreshProfile } = useAuth();
-  const [verifying, setVerifying] = useState(false);
-  const [removing, setRemoving] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
+  const [otpSentTo, setOtpSentTo] = useState<string | null>(null);
+  // Only populated when the edge function is running in dev mode (SCALER_OTP_DEV_MODE=true)
+  const [devCode, setDevCode] = useState<string | null>(null);
 
-  const verify = useCallback(async () => {
-    setVerifying(true);
+  const resetOtpRequest = useCallback(() => {
+    setOtpSentTo(null);
+    setDevCode(null);
+  }, []);
+
+  const requestOtp = useCallback(async (scalerEmail: string): Promise<boolean> => {
+    if (!isScalerEmail(scalerEmail)) {
+      toast.error(
+        `Please enter a valid Scaler student email (must end in ${SCALER_DOMAIN}).`
+      );
+      return false;
+    }
+
+    setSendingOtp(true);
     try {
-      const { error } = await supabase.auth.linkIdentity({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback?scaler_verify=1`,
-          queryParams: { prompt: 'select_account' },
-        },
+      const normalized = scalerEmail.trim().toLowerCase();
+      const { data, error } = await supabase.functions.invoke('send-scaler-otp', {
+        body: { scalerEmail: normalized },
       });
+
       if (error) throw error;
-      // Redirect happens — no further code runs here
+      if (!data?.ok) throw new Error(data?.error ?? 'Failed to send verification code.');
+
+      setOtpSentTo(normalized);
+
+      if (data.devMode && data.devCode) {
+        // Dev mode: code was not emailed, it's in the response for local testing
+        setDevCode(String(data.devCode));
+        toast.success(`Dev mode — OTP: ${data.devCode} (auto-filled below)`);
+      } else {
+        setDevCode(null);
+        toast.success('Verification code sent to your Scaler inbox.');
+      }
+
+      return true;
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Verification failed';
-      toast.error(msg);
-      setVerifying(false);
+      toast.error(toUserMessage(err, 'Failed to send verification code. Please try again.'));
+      return false;
+    } finally {
+      setSendingOtp(false);
     }
   }, []);
 
-  // Called from AuthCallback when scaler_verify=1 is in the URL
-  const handleVerifyCallback = useCallback(async () => {
-    const { data } = await supabase.auth.getUser();
-    const identities = data?.user?.identities ?? [];
-    const googleIdentity = identities
-      .filter(i => i.provider === 'google')
-      .sort((a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime())[0];
-
-    const email = googleIdentity?.identity_data?.email as string | undefined;
-    if (!email) {
-      toast.error('Could not read linked account email. Please try again.');
-      return false;
-    }
-
-    if (!isScalerEmail(email)) {
+  const verifyOtp = useCallback(async (scalerEmail: string, code: string): Promise<boolean> => {
+    if (!isScalerEmail(scalerEmail)) {
       toast.error(
-        `This doesn't appear to be a Scaler student email (${email}). Please use your official Scaler Google account.`
+        `Please enter a valid Scaler student email (must end in ${SCALER_DOMAIN}).`
       );
-      // Unlink the identity again
-      if (googleIdentity?.id) {
-        await supabase.auth.unlinkIdentity(googleIdentity as Parameters<typeof supabase.auth.unlinkIdentity>[0]);
-      }
       return false;
     }
 
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        is_scaler_verified: true,
-        scaler_email: email,
-        scaler_verified_at: new Date().toISOString(),
-      })
-      .eq('id', data.user!.id);
-
-    if (error) {
-      toast.error('Verification failed. Please try again.');
+    const normalized = scalerEmail.trim().toLowerCase();
+    const otp = code.trim();
+    if (!/^\d{6}$/.test(otp)) {
+      toast.error('Enter the 6-digit verification code.');
       return false;
     }
 
-    await refreshProfile();
-    toast.success('Scaler identity verified! New features unlocked.');
-    return true;
-  }, [refreshProfile]);
-
-  const removeVerification = useCallback(async () => {
-    setRemoving(true);
+    setVerifyingOtp(true);
     try {
-      const { data } = await supabase.auth.getUser();
-      if (!data.user) throw new Error('Not logged in');
+      const { data, error } = await supabase.functions.invoke('send-scaler-otp', {
+        body: {
+          action: 'verify',
+          scalerEmail: normalized,
+          code: otp,
+        },
+      });
 
-      await supabase
-        .from('profiles')
-        .update({
-          is_scaler_verified: false,
-          scaler_email: null,
-          scaler_verified_at: null,
-        })
-        .eq('id', data.user.id);
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error ?? 'Verification failed.');
 
       await refreshProfile();
-      toast.success('Scaler verification removed.');
+      setOtpSentTo(null);
+      setDevCode(null);
+      toast.success('Scaler email verified. Exam Travel features unlocked.');
+      return true;
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to remove verification');
+      toast.error(toUserMessage(err, 'Verification failed. Please try again.'));
+      return false;
     } finally {
-      setRemoving(false);
+      setVerifyingOtp(false);
     }
   }, [refreshProfile]);
 
@@ -106,10 +107,12 @@ export function useScalerVerification() {
     isVerified: !!profile?.is_scaler_verified,
     scalerEmail: profile?.scaler_email ?? null,
     verifiedAt: profile?.scaler_verified_at ?? null,
-    verify,
-    verifying,
-    removeVerification,
-    removing,
-    handleVerifyCallback,
+    requestOtp,
+    verifyOtp,
+    sendingOtp,
+    verifyingOtp,
+    otpSentTo,
+    devCode,
+    resetOtpRequest,
   };
 }

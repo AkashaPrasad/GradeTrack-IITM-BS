@@ -22,14 +22,14 @@ export function getBusFormState(
   const openAt = config.open_at ? new Date(config.open_at) : null;
   const closeAt = config.close_at ? new Date(config.close_at) : null;
 
-  // Manual force-close always wins
-  if (config.is_open === false && !openAt) return 'closed';
-
   // Past close time
   if (closeAt && now > closeAt) return 'closed';
 
-  // Before open time → show countdown
+  // Before open time → show countdown (even if is_open was flipped false by capacity trigger)
   if (openAt && now < openAt) return 'countdown';
+
+  // is_open=false after open window (manual close or capacity auto-close)
+  if (config.is_open === false) return 'closed';
 
   // Form is live (now >= open_at OR is_open = true with no time gate)
   if (alreadyRegistered) return 'registered';

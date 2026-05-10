@@ -1,8 +1,15 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useTitle } from '@/lib/hooks';
 import { useAuth } from '@/stores/auth';
-import { useMyEnrolments } from '@/hooks/useData';
+import {
+  useStudentTerms,
+  useSetCurrentStudentTerm,
+  useDeleteStudentTerm,
+  useMyEnrolments,
+  useMyGrades,
+  useCGPA,
+} from '@/hooks/useData';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Label } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -11,14 +18,162 @@ import { Switch } from '@/components/ui/Switch';
 import { ThemeToggle } from '@/components/layout/ThemeToggle';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/Select';
 import { ScalerVerification } from '@/components/features/scaler/ScalerVerification';
+import { CreateTermModal } from '@/components/features/terms/CreateTermModal';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Bell, BellOff } from 'lucide-react';
+import { LogOut, Bell, BellOff, BookOpen, TrendingUp, ArrowRight, PlusCircle, Trash2 } from 'lucide-react';
 import { initialOf } from '@/lib/utils';
+import { calculateScore } from '@/lib/grading/calculator';
+import { getGradePoint, getGradeColor } from '@/lib/grading/letters';
 
 
 const stagger = { hidden: {}, visible: { transition: { staggerChildren: 0.04 } } };
-const fadeUp = { hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } };
+const fadeUp  = { hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } };
+
+function TermHistoryCard({
+  onNavigateToGrades,
+  onAddTerm,
+}: {
+  onNavigateToGrades: () => void;
+  onAddTerm: () => void;
+}) {
+  const { data: studentTerms = [] } = useStudentTerms();
+  const { data: enrolments = [] }   = useMyEnrolments();
+  const { data: grades = [] }       = useMyGrades();
+  const { cgpa, totalCredits, termsWithMarks } = useCGPA();
+  const setCurrentTerm = useSetCurrentStudentTerm();
+  const deleteTerm     = useDeleteStudentTerm();
+
+  const gradeMap = useMemo(() => new Map(grades.map((g) => [g.subject_id, g])), [grades]);
+
+  const termSummaries = useMemo(() => {
+    return studentTerms.map((st) => {
+      const enrolledSubjects = enrolments
+        .filter((e) => e.subject?.term_id === st.term_id)
+        .map((e) => e.subject!)
+        .filter(Boolean);
+
+      let weighted = 0, credits = 0, hasMarks = false;
+      for (const s of enrolledSubjects) {
+        const g = gradeMap.get(s.id);
+        if (!g) continue;
+        const anyScore = [
+          g.qz1_score, g.qz2_score, g.final_exam_score, g.oppe1_score,
+          g.oppe2_score, g.roe_score, g.p1_score, g.p2_score, g.ka_score, g.bonus_score,
+        ].some((v) => typeof v === 'number');
+        if (!anyScore) continue;
+        hasMarks = true;
+        const r = calculateScore(s, g);
+        weighted += getGradePoint(r.letter as Parameters<typeof getGradePoint>[0]) * s.credits;
+        credits  += s.credits;
+      }
+      const gpa = hasMarks && credits > 0 ? Math.round((weighted / credits) * 100) / 100 : null;
+      const displayName = st.custom_name || st.term?.name || 'Unknown';
+      return { studentTerm: st, displayName, enrolledCount: enrolledSubjects.length, gpa };
+    });
+  }, [studentTerms, enrolments, gradeMap]);
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-accent" />
+            Academic History
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            {cgpa !== null && termsWithMarks > 1 && (
+              <div className="text-right mr-1">
+                <div className="text-[11px] text-fgmuted">CGPA</div>
+                <div className="text-lg font-bold num text-accent">{cgpa.toFixed(2)}</div>
+              </div>
+            )}
+            <Button variant="ghost" size="sm" onClick={onAddTerm} className="gap-1.5 px-2">
+              <PlusCircle className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Add term</span>
+            </Button>
+          </div>
+        </div>
+        {cgpa !== null && termsWithMarks > 1 && (
+          <div className="text-[12px] text-fgmuted mt-0.5">
+            {totalCredits} credits across {termsWithMarks} term{termsWithMarks !== 1 ? 's' : ''}
+          </div>
+        )}
+      </CardHeader>
+      <CardBody className="space-y-2 pt-0">
+        {termSummaries.length === 0 ? (
+          <p className="text-[13px] text-fgmuted">
+            No terms yet. Add your first academic term to start tracking your progress.
+          </p>
+        ) : (
+          termSummaries.map(({ studentTerm: st, displayName, enrolledCount, gpa }) => (
+            <div
+              key={st.id}
+              className="flex items-center gap-3 rounded-lg border border-border px-3 py-2.5"
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-[13px] font-medium truncate">{displayName}</span>
+                  {st.is_current && <Badge variant="success" className="text-[10px] shrink-0">Current</Badge>}
+                </div>
+                <div className="text-[11px] text-fgmuted">
+                  {st.term?.name && st.custom_name && st.custom_name !== st.term.name
+                    ? `${st.term.name} · `
+                    : ''}
+                  {enrolledCount} course{enrolledCount !== 1 ? 's' : ''}
+                  {gpa !== null && ` · GPA ${gpa.toFixed(2)}`}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {gpa !== null && (
+                  <div
+                    className="text-base font-bold num"
+                    style={{ color: getGradeColor(gpa * 10) }}
+                  >
+                    {gpa.toFixed(2)}
+                  </div>
+                )}
+                {!st.is_current && (
+                  <button
+                    type="button"
+                    onClick={() => setCurrentTerm.mutate(st.id)}
+                    disabled={setCurrentTerm.isPending}
+                    className="text-[11px] text-accent hover:underline"
+                  >
+                    Set current
+                  </button>
+                )}
+                {!st.is_current && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm(`Remove "${displayName}" from your history? Your enrolled courses and marks are kept.`)) {
+                        deleteTerm.mutate(st.id);
+                      }
+                    }}
+                    className="text-fgmuted hover:text-danger"
+                    title="Remove term"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+        <button
+          type="button"
+          onClick={onNavigateToGrades}
+          className="w-full flex items-center justify-center gap-1.5 text-[12px] text-accent hover:underline pt-1"
+        >
+          <BookOpen className="h-3.5 w-3.5" />
+          View &amp; manage courses
+          <ArrowRight className="h-3 w-3" />
+        </button>
+      </CardBody>
+    </Card>
+  );
+}
 
 function decodeVapidPublicKey(key: string): ArrayBuffer {
   const normalized = key.trim().replace(/-/g, '+').replace(/_/g, '/');
@@ -37,9 +192,10 @@ function decodeVapidPublicKey(key: string): ArrayBuffer {
 export default function Profile() {
   useTitle('Profile');
   const { profile, updateProfile, signOut } = useAuth();
-  const { data: enrolments = [] } = useMyEnrolments();
   const nav = useNavigate();
   const [notifLoading, setNotifLoading] = useState(false);
+  const [showCreateTerm, setShowCreateTerm] = useState(false);
+  const { data: studentTerms = [] } = useStudentTerms();
 
   const changeLevel = async (val: string) => {
     try {
@@ -159,18 +315,20 @@ export default function Profile() {
               <p className="text-[11px] text-fgsubtle mt-1">Changing level resets your course enrolment.</p>
             </div>
             <div>
-              <Label>Enrolled courses ({enrolments.length})</Label>
-              <div className="flex flex-wrap gap-1.5 mt-1.5">
-                {enrolments.map(e => (
-                  <Badge key={e.id} variant="muted">{e.subject.code}</Badge>
-                ))}
-              </div>
-              <Button variant="ghost" size="sm" className="mt-2" onClick={() => nav('/onboarding')}>
-                Change courses
+              <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => nav('/grades')}>
+                <BookOpen className="h-3.5 w-3.5" /> View &amp; manage courses in Grades
               </Button>
             </div>
           </CardBody>
         </Card>
+      </motion.div>
+
+      {/* Term history + CGPA */}
+      <motion.div variants={fadeUp}>
+        <TermHistoryCard
+          onNavigateToGrades={() => nav('/grades')}
+          onAddTerm={() => setShowCreateTerm(true)}
+        />
       </motion.div>
 
       {/* Notifications */}
@@ -234,6 +392,12 @@ export default function Profile() {
           <LogOut className="h-4 w-4" /> Sign out
         </Button>
       </motion.div>
+
+      <CreateTermModal
+        open={showCreateTerm}
+        onOpenChange={setShowCreateTerm}
+        existingCount={studentTerms.length}
+      />
     </motion.div>
   );
 }

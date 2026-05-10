@@ -1,15 +1,24 @@
-import { useState, useMemo } from 'react';
-import { MapPin, Download, Search, ChevronDown, ChevronRight } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Download, MapPin, Search, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
+import { Button } from '@/components/ui/Button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { WhatsAppButton } from '@/components/ui/WhatsAppButton';
+import { ExpandableAddress } from '@/components/ui/ExpandableAddress';
+import { AdminCentreList } from '@/components/features/admin/AdminCentreList';
 import { useTitle } from '@/lib/hooks';
-import { useAdminAllHallTickets, useAdminAllScalerStudents } from '@/hooks/useAdminBusConfig';
+import {
+  useAdminAllHallTickets,
+  useAdminAllScalerStudents,
+  useAdminSuggestedCentres,
+  useReviewSuggestedCentre,
+} from '@/hooks/useAdminBusConfig';
+import { useSaveExamCentre } from '@/hooks/useExamCentres';
 import type { ExamType, HallTicket } from '@/lib/database.types';
 
-const EXAM_TYPES: ExamType[] = ['quiz1', 'quiz2', 'endterm'];
+const EXAM_TYPES: ExamType[]              = ['quiz1', 'quiz2', 'endterm'];
 const EXAM_LABELS: Record<ExamType, string> = { quiz1: 'Quiz 1', quiz2: 'Quiz 2', endterm: 'End Term' };
 
 type TicketRow = HallTicket & { profile?: { full_name: string | null; email: string } | null };
@@ -17,33 +26,43 @@ type TicketRow = HallTicket & { profile?: { full_name: string | null; email: str
 function exportCSV(data: TicketRow[], filename: string) {
   if (!data.length) return;
   const rows = [
-    'Name,Scaler ID,Centre,Hostel,WhatsApp,Exam Date,Timing',
-    ...data.map(r =>
-      [r.student_name, r.scaler_id, r.centre_name, r.hostel ?? '', r.whatsapp_number ?? '', r.exam_date, r.exam_timing]
-        .map(v => `"${String(v).replace(/"/g, '""')}"`)
-        .join(',')
+    'Name,Roll No,Centre,Centre Address,Hostel,WhatsApp,Upload Mode,Suggested',
+    ...data.map((r) =>
+      [
+        r.student_name, r.scaler_id, r.centre_name,
+        r.centre_address ?? '', r.hostel ?? '',
+        r.whatsapp_number ?? '', r.uploaded_via,
+        r.is_suggested ? 'Yes' : 'No',
+      ]
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+        .join(','),
     ),
   ];
   const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
 }
 
-function CentreTab({ examType }: { examType: ExamType }) {
+// ── Centre Breakdown ──────────────────────────────────────────────────────────
+
+function CentreBreakdown({ examType }: { examType: ExamType }) {
   const { data: tickets = [], isLoading } = useAdminAllHallTickets(examType);
-  const typedTickets = tickets as unknown as TicketRow[];
+  const rows = tickets as TicketRow[];
   const [search, setSearch] = useState('');
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return q
-      ? typedTickets.filter(t => t.centre_name?.toLowerCase().includes(q) || t.student_name?.toLowerCase().includes(q))
-      : typedTickets;
-  }, [typedTickets, search]);
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((t) =>
+      [t.centre_name, t.student_name, t.scaler_id]
+        .filter(Boolean)
+        .some((v) => v.toLowerCase().includes(q)),
+    );
+  }, [rows, search]);
 
-  const byCentre = useMemo(() => {
+  const grouped = useMemo(() => {
     const map = new Map<string, TicketRow[]>();
     for (const t of filtered) {
       if (!map.has(t.centre_name)) map.set(t.centre_name, []);
@@ -52,28 +71,20 @@ function CentreTab({ examType }: { examType: ExamType }) {
     return Array.from(map.entries()).sort((a, b) => b[1].length - a[1].length);
   }, [filtered]);
 
-  const toggle = (centre: string) => {
-    setExpanded(prev => {
-      const s = new Set(prev);
-      s.has(centre) ? s.delete(centre) : s.add(centre);
-      return s;
-    });
-  };
-
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-fgmuted" />
           <Input
-            placeholder="Search centre or student…"
+            placeholder="Search centre or student..."
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={(e) => setSearch(e.target.value)}
             className="pl-8"
           />
         </div>
         <button
-          onClick={() => exportCSV(typedTickets, `centres_${examType}.csv`)}
+          onClick={() => exportCSV(rows, `centres_${examType}.csv`)}
           className="flex items-center gap-1.5 h-9 px-3 rounded-md text-[13px] border border-border hover:bg-surface2 transition-colors"
         >
           <Download className="h-3.5 w-3.5" /> CSV
@@ -81,60 +92,193 @@ function CentreTab({ examType }: { examType: ExamType }) {
       </div>
 
       {isLoading ? (
-        <div className="space-y-2">{[1, 2, 3].map(i => <div key={i} className="h-12 shimmer rounded-lg" />)}</div>
-      ) : byCentre.length === 0 ? (
-        <div className="text-center py-8 text-[13px] text-fgmuted">No hall tickets uploaded yet.</div>
+        <div className="text-[13px] text-fgmuted">Loading registrations…</div>
+      ) : grouped.length === 0 ? (
+        <div className="text-[13px] text-fgmuted">No centre registrations yet.</div>
       ) : (
-        byCentre.map(([centre, students]) => (
-          <Card key={centre}>
-            <button
-              className="w-full text-left px-4 py-3 flex items-center justify-between hover:bg-surface2/50 transition-colors rounded-lg"
-              onClick={() => toggle(centre)}
-            >
-              <div className="flex items-center gap-2">
-                {expanded.has(centre) ? <ChevronDown className="h-4 w-4 text-fgmuted" /> : <ChevronRight className="h-4 w-4 text-fgmuted" />}
-                <span className="font-medium text-[14px]">{centre}</span>
-                <Badge variant="muted">{students.length} student{students.length !== 1 ? 's' : ''}</Badge>
-              </div>
-            </button>
-            {expanded.has(centre) && (
-              <div className="px-4 pb-3 space-y-2">
-                {students.map(s => (
-                  <div key={s.id} className="flex items-center justify-between gap-2 py-2 border-t border-border/50">
-                    <div className="min-w-0">
-                      <div className="text-[13px] font-medium">{s.student_name}</div>
-                      <div className="text-[11px] text-fgmuted">{s.scaler_id} · {s.hostel ?? '—'}</div>
-                    </div>
-                    {s.whatsapp_number && <WhatsAppButton number={s.whatsapp_number} size="sm" />}
+        grouped.map(([centre, students]) => {
+          const first = students[0];
+          return (
+            <Card key={centre}>
+              <CardBody className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    {first.centre_address ? (
+                      <ExpandableAddress centreName={centre} address={first.centre_address} showInCard />
+                    ) : (
+                      <div className="text-[14px] font-medium">{centre}</div>
+                    )}
                   </div>
-                ))}
-              </div>
-            )}
-          </Card>
-        ))
+                  <div className="flex items-center gap-2">
+                    {students.some((s) => s.is_suggested) && (
+                      <Badge variant="warning" className="text-[10px]">Has suggestions</Badge>
+                    )}
+                    <Badge variant="muted">{students.length} student{students.length !== 1 ? 's' : ''}</Badge>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  {students.map((student) => (
+                    <div key={student.id} className="flex items-center justify-between gap-3 border-t border-border/60 pt-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <div className="text-[13px] font-medium">{student.student_name}</div>
+                          {student.is_suggested && student.suggested_status === 'pending' && (
+                            <Badge variant="warning" className="text-[10px]">Pending</Badge>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-fgmuted">
+                          {student.scaler_id} · {student.hostel ?? '—'}
+                        </div>
+                      </div>
+                      {student.whatsapp_number && <WhatsAppButton number={student.whatsapp_number} size="sm" />}
+                    </div>
+                  ))}
+                </div>
+              </CardBody>
+            </Card>
+          );
+        })
       )}
     </div>
   );
 }
 
+// ── Suggested Centres Review ──────────────────────────────────────────────────
+
+function SuggestedCentresPanel() {
+  const { data: suggestions = [], isLoading } = useAdminSuggestedCentres();
+  const review    = useReviewSuggestedCentre();
+  const saveToList = useSaveExamCentre();
+
+  const pending  = suggestions.filter((s) => s.suggested_status === 'pending');
+  const reviewed = suggestions.filter((s) => s.suggested_status !== 'pending');
+
+  const handleApprove = async (ticket: TicketRow) => {
+    if (ticket.centre_address) {
+      await saveToList.mutateAsync({
+        name:    ticket.centre_name,
+        address: ticket.centre_address,
+      });
+    }
+    await review.mutateAsync({ id: ticket.id, status: 'approved' });
+  };
+
+  const handleReject = (ticket: TicketRow) =>
+    review.mutate({ id: ticket.id, status: 'rejected' });
+
+  if (isLoading) return <div className="text-[13px] text-fgmuted">Loading suggestions…</div>;
+
+  if (suggestions.length === 0) {
+    return (
+      <div className="text-center py-10 text-[13px] text-fgmuted">
+        No suggested centres from students.
+      </div>
+    );
+  }
+
+  const renderCard = (ticket: TicketRow, showActions: boolean) => (
+    <Card key={ticket.id}>
+      <CardBody className="space-y-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-[14px] font-semibold">{ticket.centre_name}</div>
+            {ticket.centre_address && (
+              <div className="text-[12px] text-fgmuted mt-0.5 line-clamp-2">{ticket.centre_address}</div>
+            )}
+          </div>
+          <Badge
+            variant={
+              ticket.suggested_status === 'approved'
+                ? 'success'
+                : ticket.suggested_status === 'rejected'
+                ? 'danger'
+                : 'warning'
+            }
+          >
+            {ticket.suggested_status === 'pending' && <Clock className="h-3 w-3" />}
+            {ticket.suggested_status === 'approved' && <CheckCircle className="h-3 w-3" />}
+            {ticket.suggested_status === 'rejected' && <XCircle className="h-3 w-3" />}
+            {ticket.suggested_status}
+          </Badge>
+        </div>
+
+        <div className="text-[12px] text-fgmuted">
+          Suggested by <span className="font-medium">{ticket.student_name}</span>
+          {' · '}{EXAM_LABELS[ticket.exam_type]}
+        </div>
+
+        {showActions && (
+          <div className="flex gap-2 pt-1">
+            <Button
+              size="sm"
+              variant="primary"
+              loading={review.isPending || saveToList.isPending}
+              onClick={() => handleApprove(ticket as TicketRow)}
+              className="gap-1"
+            >
+              <CheckCircle className="h-3.5 w-3.5" /> Approve & Add to List
+            </Button>
+            <Button
+              size="sm"
+              variant="danger"
+              loading={review.isPending}
+              onClick={() => handleReject(ticket as TicketRow)}
+              className="gap-1"
+            >
+              <XCircle className="h-3.5 w-3.5" /> Reject
+            </Button>
+          </div>
+        )}
+      </CardBody>
+    </Card>
+  );
+
+  return (
+    <div className="space-y-4">
+      {pending.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-[13px] font-semibold text-warning">
+            {pending.length} Pending Review
+          </h3>
+          {pending.map((t) => renderCard(t as TicketRow, true))}
+        </div>
+      )}
+
+      {reviewed.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-[13px] font-semibold text-fgmuted">Previously Reviewed</h3>
+          {reviewed.map((t) => renderCard(t as TicketRow, false))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+
 export default function AdminCentres() {
   useTitle('Centre Breakdown — Admin');
   const { data: scaler = [] } = useAdminAllScalerStudents();
-  const [activeExam, setActiveExam] = useState<ExamType>('quiz1');
+  const { data: suggestions = [] } = useAdminSuggestedCentres();
+  const [pageTab, setPageTab] = useState<'breakdown' | 'suggested' | 'manage'>('breakdown');
+  const [examTab, setExamTab] = useState<ExamType>('quiz1');
+
+  const pendingCount = suggestions.filter((s) => s.suggested_status === 'pending').length;
 
   return (
-    <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-5">
+    <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-5">
       <div className="flex items-center gap-2">
         <MapPin className="h-5 w-5 text-accent" />
-        <h1 className="text-lg font-bold tracking-tightest">Centre Breakdown</h1>
+        <h1 className="text-lg font-bold tracking-tightest">Centres</h1>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: 'Scaler Verified', value: scaler.length },
-          { label: 'Total Uploads', value: '—' },
-          { label: 'Unique Centres', value: '—' },
-          { label: 'No Uploads', value: '—' },
+          { label: 'Pending Suggestions', value: pendingCount },
+          { label: 'Centre List', value: 'Managed' },
+          { label: 'Live Updates', value: 'Active' },
         ].map(({ label, value }) => (
           <Card key={label}>
             <CardBody className="text-center py-3">
@@ -145,15 +289,42 @@ export default function AdminCentres() {
         ))}
       </div>
 
-      <Tabs value={activeExam} onValueChange={(v) => setActiveExam(v as ExamType)}>
+      <Tabs value={pageTab} onValueChange={(v) => setPageTab(v as typeof pageTab)}>
         <TabsList>
-          {EXAM_TYPES.map(et => <TabsTrigger key={et} value={et}>{EXAM_LABELS[et]}</TabsTrigger>)}
+          <TabsTrigger value="breakdown">Centre Breakdown</TabsTrigger>
+          <TabsTrigger value="suggested" className="relative">
+            Suggestions
+            {pendingCount > 0 && (
+              <span className="ml-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-warning text-[10px] font-bold text-black">
+                {pendingCount}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="manage">Manage Centre List</TabsTrigger>
         </TabsList>
-        {EXAM_TYPES.map(et => (
-          <TabsContent key={et} value={et} className="mt-4">
-            <CentreTab examType={et} />
-          </TabsContent>
-        ))}
+
+        <TabsContent value="breakdown">
+          <Tabs value={examTab} onValueChange={(v) => setExamTab(v as ExamType)}>
+            <TabsList>
+              {EXAM_TYPES.map((type) => (
+                <TabsTrigger key={type} value={type}>{EXAM_LABELS[type]}</TabsTrigger>
+              ))}
+            </TabsList>
+            {EXAM_TYPES.map((type) => (
+              <TabsContent key={type} value={type}>
+                <CentreBreakdown examType={type} />
+              </TabsContent>
+            ))}
+          </Tabs>
+        </TabsContent>
+
+        <TabsContent value="suggested">
+          <SuggestedCentresPanel />
+        </TabsContent>
+
+        <TabsContent value="manage">
+          <AdminCentreList />
+        </TabsContent>
       </Tabs>
     </div>
   );

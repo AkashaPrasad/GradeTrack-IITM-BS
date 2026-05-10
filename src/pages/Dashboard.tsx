@@ -1,13 +1,16 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, AlertTriangle, ChevronDown, X } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, ChevronDown, X, PlusCircle, TrendingUp } from 'lucide-react';
 import { useAuth } from '@/stores/auth';
 import { useTitle } from '@/lib/hooks';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { Progress } from '@/components/ui/Progress';
 import { Skeleton, SkeletonCard } from '@/components/ui/Skeleton';
-import { useActiveTerm, useAssignments, useMyCompletions, useMyGrades, useMySubjects, useRealtimeAssignments, useToggleCompletion } from '@/hooks/useData';
+import { CreateTermModal } from '@/components/features/terms/CreateTermModal';
+import { useStudentCurrentTerm, useStudentTerms, useAutoMigrateStudentTerms, useAssignments, useMyCompletions, useMyGrades, useMyEnrolledSubjectsForStudentTerm, useRealtimeAssignments, useToggleCompletion } from '@/hooks/useData';
 import { filterAssignmentsForEnrolledSubjects, filterWeeklyAssignmentsForEnrolledSubjects, formatWeeklyAssignmentLabel, normalizeOppeTitle } from '@/lib/assignments';
 import { calculateScore, checkEligibility } from '@/lib/grading/calculator';
 import { daysUntil, formatDate, percentage } from '@/lib/utils';
@@ -130,13 +133,17 @@ function DashWeekGroup({ weekNum, items, subjects, level, toggle }: {
 export default function Dashboard() {
   useTitle('Dashboard');
   const { profile } = useAuth();
-  const { data: term, isLoading: termLoading } = useActiveTerm();
-  const subjects = useMySubjects();
+  const nav = useNavigate();
+  const { termId, level, studentTerm, isLoading: termLoading } = useStudentCurrentTerm();
+  const { data: studentTerms = [] } = useStudentTerms();
+  const [showCreateTerm, setShowCreateTerm] = useState(false);
+  useAutoMigrateStudentTerms();
+  const subjects = useMyEnrolledSubjectsForStudentTerm(studentTerm);
   const { data: grades = [], isLoading: gradesLoading } = useMyGrades();
-  const { data: assignments = [], isLoading: assLoading } = useAssignments(term?.id);
+  const { data: assignments = [], isLoading: assLoading } = useAssignments(termId ?? undefined, level);
   const { data: completions = [] } = useMyCompletions();
   const toggle = useToggleCompletion();
-  useRealtimeAssignments(term?.id);
+  useRealtimeAssignments(termId ?? undefined);
 
   const loading = termLoading || gradesLoading || assLoading;
 
@@ -167,7 +174,7 @@ export default function Dashboard() {
   const upcomingWeeks = useMemo(() => {
     const grouped = new Map<number, Assignment[]>();
     for (const a of weeklyAssignments) {
-      const dl = deadlineFor(a, profile?.level);
+      const dl = deadlineFor(a, level);
       if (!dl) continue;
       const days = daysUntil(dl);
       if (days === null || days < 0 || days > 21) continue; // skip overdue & far future
@@ -178,14 +185,14 @@ export default function Dashboard() {
       grouped.get(w)!.push(a);
     }
     return [...grouped.entries()].sort((a, b) => a[0] - b[0]);
-  }, [weeklyAssignments, completionMap, profile?.level]);
+  }, [weeklyAssignments, completionMap, level]);
 
   // Upcoming exams (quiz/oppe/endterm only) — next 14 days, with OPPE Day 1/2 merged
   const upcomingExams = useMemo(() => {
     const raw = visibleAssignments
       .filter(a => EXAM_CATS.includes(a.category))
       .map(a => {
-        const dl = a.exam_date ?? deadlineFor(a, profile?.level);
+        const dl = a.exam_date ?? deadlineFor(a, level);
         return { ...a, deadline: dl, days: daysUntil(dl) };
       })
       .filter(a => a.days !== null && a.days >= 0 && a.days <= 14)
@@ -216,7 +223,7 @@ export default function Dashboard() {
       result.push(a.category === 'oppe' ? { ...a, title: normalizeOppeTitle(a.title) } : a);
     }
     return result.slice(0, 8);
-  }, [profile?.level, visibleAssignments]);
+  }, [level, visibleAssignments]);
 
   // Stats
   const totalWeekly = weeklyAssignments.length;
@@ -225,13 +232,13 @@ export default function Dashboard() {
   ).length;
   const pendingThisWeek = useMemo(() =>
     weeklyAssignments.filter(a => {
-      const dl = deadlineFor(a, profile?.level);
+      const dl = deadlineFor(a, level);
       const days = daysUntil(dl);
       if (days === null || days < 0 || days > 7) return false;
       const completion = completionMap.get(a.id);
       return !completion?.is_completed && !completion?.skipped;
     }).length,
-    [weeklyAssignments, completionMap, profile?.level]
+    [weeklyAssignments, completionMap, level]
   );
 
   // Grade predictions
@@ -272,6 +279,50 @@ export default function Dashboard() {
     );
   }
 
+  // Student has past terms but no current one → show "start new term" prompt
+  if (!termLoading && studentTerm === null && studentTerms.length > 0) {
+    return (
+      <motion.div initial="hidden" animate="visible" variants={stagger} className="p-4 md:p-6 max-w-5xl mx-auto space-y-5">
+        <motion.div variants={fadeUp}>
+          <h1 className="text-lg font-bold tracking-tightest">
+            Hi, {profile?.full_name?.split(' ')[0] ?? profile?.roll_number ?? 'there'}
+          </h1>
+          <p className="text-sm text-fgmuted">Your term has ended. Start a new one when you're ready.</p>
+        </motion.div>
+
+        <motion.div variants={fadeUp}>
+          <Card>
+            <CardBody className="flex flex-col items-center text-center py-10 gap-4">
+              <div className="h-14 w-14 rounded-full bg-accent/10 grid place-items-center">
+                <TrendingUp className="h-7 w-7 text-accent" />
+              </div>
+              <div>
+                <div className="text-[15px] font-semibold">Ready for a new term?</div>
+                <div className="text-sm text-fgmuted mt-1.5 max-w-sm">
+                  Your past grades are saved in Academic History on your Profile. Create a new term to track courses, assignments and exams.
+                </div>
+              </div>
+              <div className="flex flex-wrap justify-center gap-3 pt-1">
+                <Button onClick={() => setShowCreateTerm(true)} className="gap-1.5">
+                  <PlusCircle className="h-4 w-4" /> Create new term
+                </Button>
+                <Button variant="ghost" onClick={() => nav('/profile')}>
+                  View Academic History
+                </Button>
+              </div>
+            </CardBody>
+          </Card>
+        </motion.div>
+
+        <CreateTermModal
+          open={showCreateTerm}
+          onOpenChange={setShowCreateTerm}
+          existingCount={studentTerms.length}
+        />
+      </motion.div>
+    );
+  }
+
   return (
     <motion.div initial="hidden" animate="visible" variants={stagger} className="p-4 md:p-6 max-w-5xl mx-auto space-y-5">
       {/* Header */}
@@ -280,7 +331,7 @@ export default function Dashboard() {
           Hi, {profile?.full_name?.split(' ')[0] ?? profile?.roll_number ?? 'there'}
         </h1>
         <p className="text-sm text-fgmuted">
-          {term ? `${term.name} · ${subjects.length} courses enrolled` : 'No active term'}
+          {termId ? `${subjects.length} courses enrolled` : 'No active term'}
         </p>
       </motion.div>
 
@@ -340,7 +391,7 @@ export default function Dashboard() {
                 weekNum={weekNum}
                 items={items}
                 subjects={subjects}
-                level={profile?.level}
+                level={level}
                 toggle={toggle}
               />
             ))}
@@ -382,6 +433,12 @@ export default function Dashboard() {
           </div>
         </motion.div>
       )}
+
+      <CreateTermModal
+        open={showCreateTerm}
+        onOpenChange={setShowCreateTerm}
+        existingCount={studentTerms.length}
+      />
     </motion.div>
   );
 }

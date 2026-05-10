@@ -6,6 +6,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { WhatsAppButton } from '@/components/ui/WhatsAppButton';
 import { LiveIndicator } from '@/components/ui/LiveIndicator';
 import { ScalerBadge } from '@/components/ui/ScalerBadge';
+import { ExpandableAddress } from '@/components/ui/ExpandableAddress';
 import { useCentreStudents } from '@/hooks/useCentreStudents';
 import type { ExamType, HallTicket } from '@/lib/database.types';
 import { useAuth } from '@/stores/auth';
@@ -23,26 +24,40 @@ function StudentCard({ ticket, isMe }: { ticket: HallTicket; isMe: boolean }) {
   return (
     <motion.div
       variants={fadeUp}
-      className="flex items-center justify-between gap-3 py-2.5 px-3 rounded-lg bg-surface2/50 hover:bg-surface2 transition-colors"
+      className="rounded-lg bg-surface2/50 px-3 py-3 hover:bg-surface2 transition-colors"
     >
-      <div className="flex items-center gap-2.5 min-w-0">
-        <div className="h-8 w-8 rounded-full bg-accent/15 text-accent grid place-items-center text-[13px] font-semibold shrink-0">
-          {ticket.student_name.charAt(0).toUpperCase()}
-        </div>
-        <div className="min-w-0">
-          <div className="text-[13px] font-medium truncate">
-            {ticket.student_name} {isMe && <span className="text-[11px] text-fgsubtle">(you)</span>}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="h-8 w-8 rounded-full bg-accent/15 text-accent grid place-items-center text-[13px] font-semibold shrink-0">
+            {ticket.student_name.charAt(0).toUpperCase()}
           </div>
-          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-            {ticket.hostel && (
-              <Badge variant="muted" className="text-[10px]">{ticket.hostel}</Badge>
-            )}
-            <ScalerBadge size="sm" />
+          <div className="min-w-0">
+            <div className="text-[13px] font-medium truncate">
+              {ticket.student_name} {isMe && <span className="text-[11px] text-fgsubtle">(you)</span>}
+            </div>
+            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+              {ticket.hostel && (
+                <Badge variant="muted" className="text-[10px]">
+                  {ticket.hostel === 'Uniworld 1' ? 'UW1' : 'UW2'}
+                </Badge>
+              )}
+              <ScalerBadge size="sm" />
+            </div>
           </div>
         </div>
+        {ticket.whatsapp_number && !isMe && (
+          <WhatsAppButton number={ticket.whatsapp_number} size="sm" className="shrink-0" />
+        )}
       </div>
-      {ticket.whatsapp_number && !isMe && (
-        <WhatsAppButton number={ticket.whatsapp_number} size="sm" className="shrink-0" />
+
+      {ticket.centre_address && (
+        <div className="mt-3">
+          <ExpandableAddress
+            centreName={ticket.centre_name}
+            address={ticket.centre_address}
+            showInCard
+          />
+        </div>
       )}
     </motion.div>
   );

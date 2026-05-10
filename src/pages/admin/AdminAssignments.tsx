@@ -13,11 +13,12 @@ import { Dialog, DialogTrigger, DialogContent, DialogTitle, DialogClose } from '
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Empty } from '@/components/ui/Empty';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Eye, EyeOff } from 'lucide-react';
+import { Plus, Pencil, Trash2, Eye, EyeOff, Calendar } from 'lucide-react';
 import { formatDate, toUserMessage } from '@/lib/utils';
 import type { Assignment, Term, Subject } from '@/lib/database.types';
 
 const CATEGORIES = ['weekly','quiz','endterm','oppe','project','bonus','roe','bpt','ka','extra'] as const;
+const TERM_TYPES = [{ value: 'jan', label: 'January' }, { value: 'may', label: 'May' }, { value: 'sep', label: 'September' }] as const;
 
 export default function AdminAssignments() {
   useTitle('Admin — Assignments');
@@ -25,6 +26,7 @@ export default function AdminAssignments() {
   const qc = useQueryClient();
   const [termId, setTermId] = useState<string>('');
   const [editing, setEditing] = useState<Partial<Assignment> | null>(null);
+  const [newTerm, setNewTerm] = useState<{ name: string; term_type: string; start_date: string; end_date: string } | null>(null);
 
   const { data: terms = [] } = useQuery({
     queryKey: ['admin-terms'],
@@ -96,6 +98,25 @@ export default function AdminAssignments() {
     onError: (e: unknown) => toast.error(toUserMessage(e, 'Failed to delete assignment'))
   });
 
+  const createTermMut = useMutation({
+    mutationFn: async (t: { name: string; term_type: string; start_date: string; end_date: string }) => {
+      const { data, error } = await supabase.from('terms').insert({
+        name: t.name, term_type: t.term_type,
+        start_date: t.start_date, end_date: t.end_date,
+        is_active: false, created_by: profile?.id,
+      }).select('id').single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['admin-terms'] });
+      setTermId(data.id);
+      setNewTerm(null);
+      toast.success('Term created!');
+    },
+    onError: (e: unknown) => toast.error(toUserMessage(e, 'Failed to create term')),
+  });
+
   const togglePublish = (a: Assignment) => saveMut.mutate({ ...a, is_published: !a.is_published });
 
   return (
@@ -106,9 +127,50 @@ export default function AdminAssignments() {
           <Select value={selectedTerm} onValueChange={setTermId}>
             <SelectTrigger className="w-44"><SelectValue placeholder="Select term" /></SelectTrigger>
             <SelectContent>
-              {terms.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+              {terms.map(t => <SelectItem key={t.id} value={t.id}>{t.name}{t.is_active ? ' (active)' : ''}</SelectItem>)}
             </SelectContent>
           </Select>
+          {/* New Term dialog */}
+          <Dialog open={!!newTerm} onOpenChange={o => { if (!o) setNewTerm(null); }}>
+            <DialogTrigger asChild>
+              <Button variant="ghost" size="sm" onClick={() => setNewTerm({ name: '', term_type: 'may', start_date: '', end_date: '' })} title="Create new term">
+                <Calendar className="h-4 w-4" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-sm">
+              <DialogTitle>Create New Term</DialogTitle>
+              <div className="space-y-3 mt-3">
+                <div><Label>Term name</Label>
+                  <Input className="mt-1" placeholder="May 2026 Term"
+                    value={newTerm?.name ?? ''} onChange={e => setNewTerm(p => p ? { ...p, name: e.target.value } : p)} />
+                </div>
+                <div><Label>Semester type</Label>
+                  <Select value={newTerm?.term_type ?? 'may'} onValueChange={v => setNewTerm(p => p ? { ...p, term_type: v } : p)}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>{TERM_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div><Label>Start date</Label>
+                    <Input type="date" className="mt-1" value={newTerm?.start_date ?? ''}
+                      onChange={e => setNewTerm(p => p ? { ...p, start_date: e.target.value } : p)} />
+                  </div>
+                  <div><Label>End date</Label>
+                    <Input type="date" className="mt-1" value={newTerm?.end_date ?? ''}
+                      onChange={e => setNewTerm(p => p ? { ...p, end_date: e.target.value } : p)} />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 pt-1">
+                  <DialogClose asChild><Button variant="ghost" size="sm">Cancel</Button></DialogClose>
+                  <Button size="sm" loading={createTermMut.isPending}
+                    disabled={!newTerm?.name || !newTerm?.start_date || !newTerm?.end_date}
+                    onClick={() => newTerm && createTermMut.mutate(newTerm)}>
+                    Create
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
           <Dialog open={!!editing && !editing.id} onOpenChange={o => { if (!o) setEditing(null); }}>
             <DialogTrigger asChild>
               <Button size="sm" onClick={() => setEditing({ title: '', category: 'weekly', is_published: true })}>

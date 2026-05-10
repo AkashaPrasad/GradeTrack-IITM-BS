@@ -1,29 +1,49 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, CheckCircle, Lock, Calendar } from 'lucide-react';
+import { CheckCircle, Lock, Calendar, MapPin, AlertCircle, PenLine } from 'lucide-react';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { ExpandableAddress } from '@/components/ui/ExpandableAddress';
 import { HallTicketUpload } from './HallTicketUpload';
+import { useDeleteHallTicket } from '@/hooks/useHallTicket';
 import type { ExamType, HallTicket } from '@/lib/database.types';
 import { formatDate, daysUntil } from '@/lib/utils';
 
 interface ExamCardProps {
-  examType: ExamType;
-  examDate: string | null;
-  hallTicket: HallTicket | null | undefined;
-  isLoading: boolean;
+  examType:       ExamType;
+  examDate:       string | null;
+  hallTicket:     HallTicket | null | undefined;
+  isLoading:      boolean;
+  centreRegOpen?: boolean | null;  // null = auto (7 days before exam), true = force open, false = force closed
 }
 
 const EXAM_LABELS: Record<ExamType, string> = {
-  quiz1: 'Quiz 1',
-  quiz2: 'Quiz 2',
+  quiz1:   'Quiz 1',
+  quiz2:   'Quiz 2',
   endterm: 'End Term',
 };
 
-export function ExamCard({ examType, examDate, hallTicket, isLoading }: ExamCardProps) {
-  const [uploadOpen, setUploadOpen] = useState(false);
+function isCentreRegistrationOpen(examDate: string | null, centreRegOpen: boolean | null | undefined): boolean {
+  if (centreRegOpen === true) return true;
+  if (centreRegOpen === false) return false;
+  // Auto mode: open if exam is within 7 days (or already passed) and date is set
+  if (!examDate) return false;
+  const days = daysUntil(examDate);
+  return days !== null && days <= 7;
+}
+
+function daysUntilOpen(examDate: string | null): number | null {
+  if (!examDate) return null;
+  const days = daysUntil(examDate);
+  if (days === null) return null;
+  return Math.max(0, days - 7);
+}
+
+export function ExamCard({ examType, examDate, hallTicket, isLoading, centreRegOpen }: ExamCardProps) {
+  const [formOpen, setFormOpen] = useState(false);
+  const deleteTicket = useDeleteHallTicket();
 
   if (isLoading) {
     return (
@@ -37,8 +57,11 @@ export function ExamCard({ examType, examDate, hallTicket, isLoading }: ExamCard
     );
   }
 
-  const isExpired = hallTicket && new Date(hallTicket.expires_at) < new Date();
-  const days = examDate ? daysUntil(examDate) : null;
+  const isExpired      = hallTicket && new Date(hallTicket.expires_at) < new Date();
+  const days           = examDate ? daysUntil(examDate) : null;
+  const isPending      = hallTicket?.is_suggested && hallTicket.suggested_status === 'pending';
+  const regOpen        = isCentreRegistrationOpen(examDate, centreRegOpen);
+  const daysToOpen     = !regOpen ? daysUntilOpen(examDate) : null;
 
   return (
     <>
@@ -57,55 +80,101 @@ export function ExamCard({ examType, examDate, hallTicket, isLoading }: ExamCard
                     <Calendar className="h-3 w-3" />
                     {formatDate(examDate)}
                     {days !== null && days >= 0 && (
-                      <span className="text-fgsubtle">· {days === 0 ? 'Today' : `${days}d away`}</span>
+                      <span className="text-fgsubtle">
+                        · {days === 0 ? 'Today' : `${days}d away`}
+                      </span>
                     )}
                   </div>
                 ) : (
-                  <div className="text-[12px] text-fgsubtle mt-0.5">Date not set</div>
+                  <div className="text-[12px] text-fgsubtle mt-0.5">Date not announced yet</div>
                 )}
               </div>
+
               {isExpired ? (
                 <Badge variant="muted">
                   <Lock className="h-3 w-3" /> Closed
                 </Badge>
               ) : hallTicket ? (
-                <Badge variant="success">
-                  <CheckCircle className="h-3 w-3" /> Uploaded
-                </Badge>
+                isPending ? (
+                  <Badge variant="warning">
+                    <AlertCircle className="h-3 w-3" /> Pending Review
+                  </Badge>
+                ) : (
+                  <Badge variant="success">
+                    <CheckCircle className="h-3 w-3" /> Registered
+                  </Badge>
+                )
               ) : (
-                <Badge variant="muted">Not uploaded</Badge>
+                <Badge variant="muted">Not Registered</Badge>
               )}
             </div>
 
             {hallTicket && !isExpired && (
-              <div className="text-[12px] text-fgmuted bg-surface2 rounded-md px-3 py-2 space-y-0.5">
-                <div><span className="text-fgsubtle">Centre: </span>{hallTicket.centre_name}</div>
-                <div><span className="text-fgsubtle">Timing: </span>{hallTicket.exam_timing}</div>
+              <div className="text-[12px] bg-surface2 rounded-md px-3 py-2.5 space-y-1.5">
+                {hallTicket.centre_address ? (
+                  <ExpandableAddress
+                    centreName={hallTicket.centre_name}
+                    address={hallTicket.centre_address}
+                  />
+                ) : (
+                  <div className="flex items-center gap-1.5 text-fgmuted">
+                    <MapPin className="h-3.5 w-3.5 text-accent shrink-0" />
+                    <span className="font-medium truncate">{hallTicket.centre_name}</span>
+                  </div>
+                )}
+                {isPending && (
+                  <p className="text-[11px] text-warning flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3 shrink-0" />
+                    Your suggested centre is awaiting admin review.
+                  </p>
+                )}
               </div>
             )}
 
             {isExpired ? (
-              <p className="text-[12px] text-fgsubtle">
-                Section closed — exam period ended
+              <p className="text-[12px] text-fgsubtle">Exam period ended.</p>
+            ) : !regOpen && !hallTicket ? (
+              <p className="text-[12px] text-fgmuted flex items-center gap-1.5">
+                <Lock className="h-3.5 w-3.5 shrink-0" />
+                {daysToOpen !== null && daysToOpen > 0
+                  ? `Registration opens in ${daysToOpen} day${daysToOpen !== 1 ? 's' : ''}`
+                  : examDate
+                  ? 'Registration opens 7 days before the exam'
+                  : 'Registration opens once exam date is announced'}
               </p>
             ) : (
-              <Button
-                variant={hallTicket ? 'secondary' : 'primary'}
-                size="sm"
-                onClick={() => setUploadOpen(true)}
-                className="gap-1.5"
-              >
-                <Upload className="h-3.5 w-3.5" />
-                {hallTicket ? 'Re-upload' : 'Upload Hall Ticket'}
-              </Button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  variant={hallTicket ? 'secondary' : 'primary'}
+                  size="sm"
+                  onClick={() => setFormOpen(true)}
+                  className="gap-1.5"
+                >
+                  <PenLine className="h-3.5 w-3.5" />
+                  {hallTicket ? 'Update Centre' : 'Register Centre'}
+                </Button>
+                {hallTicket && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm('Remove your exam centre registration?')) {
+                        void deleteTicket.mutate(hallTicket.id);
+                      }
+                    }}
+                    className="text-[12px] text-danger hover:underline"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
             )}
           </CardBody>
         </Card>
       </motion.div>
 
       <HallTicketUpload
-        open={uploadOpen}
-        onClose={() => setUploadOpen(false)}
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
         examType={examType}
         defaultExamDate={examDate ?? undefined}
       />

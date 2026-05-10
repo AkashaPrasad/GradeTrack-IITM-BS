@@ -56,15 +56,15 @@ export function useExamSchedule() {
 }
 
 interface UploadHallTicketInput {
-  examType: ExamType;
-  studentName: string;
-  scalerId: string;
-  centreName: string;
-  examDate: string;
-  examTiming: string;
+  examType:       ExamType;
+  studentName:    string;
+  scalerId:       string;
+  centreName:     string;
+  centreAddress?: string;
+  examDate:       string | null;
   whatsappNumber: string;
-  hostel: 'Uniworld 1' | 'Uniworld 2';
-  pdfFile?: File;
+  hostel:         'Uniworld 1' | 'Uniworld 2';
+  isSuggested:    boolean;
 }
 
 export function useUploadHallTicket() {
@@ -75,53 +75,63 @@ export function useUploadHallTicket() {
     mutationFn: async (input: UploadHallTicketInput) => {
       if (!user) throw new Error('Not logged in');
 
-      let pdfPath: string | null = null;
-      if (input.pdfFile) {
-        const path = `${user.id}/${input.examType}/hall_ticket.pdf`;
-        const { error: uploadError } = await supabase.storage
-          .from('hall-tickets')
-          .upload(path, input.pdfFile, { upsert: true, contentType: 'application/pdf' });
-        if (uploadError) throw uploadError;
-        pdfPath = path;
+      // expires_at: exam date + 10 days if known, otherwise 6 months from now
+      let expiresAt: Date;
+      if (input.examDate) {
+        expiresAt = new Date(input.examDate);
+        expiresAt.setDate(expiresAt.getDate() + 10);
+      } else {
+        expiresAt = new Date();
+        expiresAt.setMonth(expiresAt.getMonth() + 6);
       }
-
-      const examDate = new Date(input.examDate);
-      const expiresAt = new Date(examDate);
-      expiresAt.setDate(expiresAt.getDate() + 10);
 
       const { error } = await supabase.from('hall_tickets').upsert(
         {
-          user_id: user.id,
-          exam_type: input.examType,
-          student_name: input.studentName.trim(),
-          scaler_id: input.scalerId.trim(),
-          centre_name: normaliseCentreName(input.centreName),
-          exam_date: input.examDate,
-          exam_timing: input.examTiming.trim(),
-          whatsapp_number: input.whatsappNumber.trim() || null,
-          hostel: input.hostel,
-          pdf_storage_path: pdfPath,
-          expires_at: expiresAt.toISOString(),
-          is_active: true,
+          user_id:          user.id,
+          exam_type:        input.examType,
+          student_name:     input.studentName.trim(),
+          scaler_id:        input.scalerId.trim(),
+          centre_name:      normaliseCentreName(input.centreName),
+          centre_address:   input.centreAddress?.trim() || null,
+          exam_date:        input.examDate ?? null,
+          reporting_time:   null,
+          exam_timing:      null,
+          shift:            null,
+          whatsapp_number:  input.whatsappNumber.trim() || null,
+          hostel:           input.hostel,
+          pdf_storage_path: null,
+          uploaded_via:     'manual',
+          expires_at:       expiresAt.toISOString(),
+          is_active:        true,
+          is_suggested:     input.isSuggested,
+          suggested_status: input.isSuggested ? 'pending' : 'approved',
         },
-        { onConflict: 'user_id,exam_type' }
+        { onConflict: 'user_id,exam_type' },
       );
       if (error) throw error;
 
-      // Persist whatsapp + hostel to profile for reuse
-      await updateProfile({
-        whatsapp_number: input.whatsappNumber.trim() || null,
-        hostel: input.hostel,
-        scaler_id: input.scalerId.trim() || null,
-      });
+      // Sync profile fields (best-effort)
+      try {
+        await updateProfile({
+          whatsapp_number: input.whatsappNumber.trim() || null,
+          hostel:          input.hostel,
+          scaler_id:       input.scalerId.trim() || null,
+        });
+      } catch {
+        // Profile sync is best-effort; centre registration already saved
+      }
     },
     onSuccess: (_, vars) => {
       void qc.invalidateQueries({ queryKey: ['hall_tickets'] });
       void qc.invalidateQueries({ queryKey: ['centre_students', vars.examType] });
-      toast.success('Hall ticket uploaded successfully!');
+      toast.success(
+        vars.isSuggested
+          ? 'Centre saved! Your suggestion is pending admin review.'
+          : 'Exam centre registered successfully.',
+      );
     },
     onError: (err) => {
-      toast.error(toUserMessage(err, 'Upload failed. Please try again.'));
+      toast.error(toUserMessage(err, 'Failed to save. Please try again.'));
     },
   });
 }
@@ -135,7 +145,7 @@ export function useDeleteHallTicket() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['hall_tickets'] });
-      toast.success('Hall ticket removed.');
+      toast.success('Exam centre registration removed.');
     },
     onError: (err) => {
       toast.error(toUserMessage(err));

@@ -3,20 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { supabase, emailIsAllowed, logEvent } from '@/lib/supabase';
 import { useAuth } from '@/stores/auth';
 import { useTitle } from '@/lib/hooks';
-import { useScalerVerification } from '@/hooks/useScalerVerification';
 
 export default function AuthCallback() {
   useTitle('Signing in…');
   const nav = useNavigate();
   const { refreshProfile } = useAuth();
-  const { handleVerifyCallback } = useScalerVerification();
 
   useEffect(() => {
     let active = true;
 
     const finishSignIn = async () => {
       const params = new URLSearchParams(window.location.search);
-      const isScalerVerify = params.get('scaler_verify') === '1';
       const providerError = params.get('error_description') ?? params.get('error');
 
       if (providerError) {
@@ -68,20 +65,10 @@ export default function AuthCallback() {
 
       await logEvent('auth.login', { email });
 
-      // Race against an 8-second timeout so the page never hangs forever
-      // if the profile fetch stalls. profileResolved is guaranteed by try/finally
-      // in refreshProfile, so navigation is always safe after this.
       await Promise.race([
         refreshProfile(),
         new Promise<void>(resolve => setTimeout(resolve, 8000)),
       ]);
-
-      // Handle Scaler identity-link callback
-      if (isScalerVerify) {
-        await handleVerifyCallback();
-        if (active) nav('/profile', { replace: true });
-        return;
-      }
 
       if (active) {
         nav('/dashboard', { replace: true });
