@@ -48,10 +48,12 @@ function TermHistoryCard({
 
   const termSummaries = useMemo(() => {
     return studentTerms.map((st) => {
-      const enrolledSubjects = enrolments
-        .filter((e) => e.subject?.term_id === st.term_id)
-        .map((e) => e.subject!)
-        .filter(Boolean);
+      const subjectIdSet = new Set(st.subject_ids ?? []);
+      const enrolledSubjects = subjectIdSet.size > 0
+        ? enrolments.filter(e => subjectIdSet.has(e.subject_id)).map(e => e.subject!).filter(Boolean)
+        : st.term_id
+          ? enrolments.filter(e => e.subject?.term_id === st.term_id && e.subject?.level === st.level).map(e => e.subject!).filter(Boolean)
+          : [];
 
       let weighted = 0, credits = 0, hasMarks = false;
       for (const s of enrolledSubjects) {

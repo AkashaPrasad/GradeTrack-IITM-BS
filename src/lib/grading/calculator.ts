@@ -4,7 +4,8 @@ import { getGradeLetter } from './letters';
 
 // ---------- helpers ---------------------------------------------------------
 
-export function bestNOfM(scores: (number | null | undefined)[], n: number, m: number): number {
+export function bestNOfM(scores: (number | null | undefined)[] | null | undefined, n: number, m: number): number {
+  if (!scores) return 0;
   const first = scores.slice(0, m).map(s => (typeof s === 'number' ? s : 0));
   const sorted = [...first].sort((a, b) => b - a);
   const take = sorted.slice(0, Math.min(n, sorted.length));
@@ -12,13 +13,15 @@ export function bestNOfM(scores: (number | null | undefined)[], n: number, m: nu
   return take.reduce((a, b) => a + b, 0) / take.length;
 }
 
-export function averageOf(scores: (number | null | undefined)[]): number {
+export function averageOf(scores: (number | null | undefined)[] | null | undefined): number {
+  if (!scores) return 0;
   const vals = scores.filter((s): s is number => typeof s === 'number');
   if (vals.length === 0) return 0;
   return vals.reduce((a, b) => a + b, 0) / vals.length;
 }
 
-export function averageOfFirstN(scores: (number | null | undefined)[], n: number): number {
+export function averageOfFirstN(scores: (number | null | undefined)[] | null | undefined, n: number): number {
+  if (!scores) return 0;
   return averageOf(scores.slice(0, n));
 }
 
