@@ -129,8 +129,10 @@ export function calculateScore(subject: Subject, grade: Grade): ScoreResult {
     let bonus = 0;
     if (cfg.bonusFormula) {
       const rawBonus = compileFormula(cfg.bonusFormula).evaluate(vars);
-      const cap = cfg.bonusCap ?? 0;
+      const cap = cfg.bonusCap ?? 7;
       bonus = Math.min(rawBonus, cap);
+    } else {
+      bonus = Math.min(grade.bonus_score ?? 0, cfg.bonusCap ?? 7);
     }
     const pre = base + bonus;
     const cap = cfg.capTotalAt ?? 100;
