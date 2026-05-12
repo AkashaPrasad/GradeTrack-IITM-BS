@@ -202,9 +202,9 @@ function SubjectGradeCard({
 
           {/* Bonus */}
           <div>
-            <Label>Bonus marks (max {s.has_bonus && s.bonus_max ? s.bonus_max : 7})</Label>
+            <Label>Bonus marks (max {s.has_bonus && s.bonus_max ? s.bonus_max : 10})</Label>
             <Input
-              type="number" min={0} max={s.has_bonus && s.bonus_max ? s.bonus_max : 7} step="0.5"
+              type="number" min={0} max={s.has_bonus && s.bonus_max ? s.bonus_max : 10} step="0.5"
               className="mt-1 w-32" placeholder="0"
               defaultValue={effective.bonus_score ?? ''}
               onChange={(e) => setField('bonus_score', e.target.value === '' ? null : Number(e.target.value))}
